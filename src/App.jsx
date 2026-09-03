@@ -1055,10 +1055,18 @@ function App() {
           </div>
 
           <div className="execution-buttons">
-            <button type="button" onClick={handlePrev} disabled={!snapshots.length}>
+            <button
+              type="button"
+              onClick={handlePrev}
+              disabled={!snapshots.length}
+            >
               Passo anterior
             </button>
-            <button type="button" onClick={handleNext} disabled={!snapshots.length}>
+            <button
+              type="button"
+              onClick={handleNext}
+              disabled={!snapshots.length}
+            >
               Próximo passo
             </button>
             <button
@@ -1128,6 +1136,44 @@ function App() {
               </span>
             </div>
           </div>
+
+          <h3>Valores atuais</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>v</th>
+                <th>t[v]</th>
+                <th>C[v]</th>
+                <th>C′[v]</th>
+              </tr>
+            </thead>
+            <tbody>
+              {nodes.map((node) => {
+                const id = node.id;
+                const char = node.data.char || '?';
+                const Cv = current
+                  ? current.C[id] ?? node.data.C
+                  : node.data.C;
+                const Cnextv = current
+                  ? current.Cnext[id] ?? node.data.Cnext
+                  : node.data.Cnext;
+                const changedRow =
+                  current?.changedNodes?.includes(id) ?? false;
+
+                return (
+                  <tr
+                    key={id}
+                    className={changedRow ? 'changed-row' : ''}
+                  >
+                    <td>{id}</td>
+                    <td>{char}</td>
+                    <td>{displayValue(Cv)}</td>
+                    <td>{displayValue(Cnextv)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
 
           {selectedPath && (
             <div className="best-path-box">
@@ -1205,34 +1251,48 @@ function App() {
           <ul className="pseudocode">
             <li className={currentLine === 1 ? 'active-line' : ''}>
               <span>1</span>
-              <span>Inicializar C[v] ← 0 para todo v ∈ V.</span>
+              <span>para todo v ∈ V: C[v] ← 0</span>
             </li>
             <li className={currentLine === 2 ? 'active-line' : ''}>
               <span>2</span>
-              <span>
-                Para i = 1..m, processar patt[i] e calcular C′[v] para todo
-                v.
-              </span>
+              <span>para i = 1 até m</span>
             </li>
             <li className={currentLine === 3 ? 'active-line' : ''}>
               <span>3</span>
-              <span>
-                Calcular C′[v] considerando casamento, substituição,
-                deleção no padrão.
-              </span>
+              <span>para todo v ∈ V: C′[v] ← g(v, i)</span>
             </li>
             <li className={currentLine === 4 ? 'active-line' : ''}>
               <span>4</span>
-              <span>C[v] ← C′[v] para todo v.</span>
+              <span>para todo v ∈ V: C[v] ← C′[v]</span>
             </li>
             <li className={currentLine === 5 ? 'active-line' : ''}>
               <span>5</span>
-              <span>
-                Propagar inserções no texto: enquanto houver aresta (u, v)
-                com C[v] &gt; 1 + C[u], atualizar C[v].
-              </span>
+              <span>para toda aresta (u, v) ∈ E: Propagate(u, v)</span>
+            </li>
+            <li className={currentLine === 'P1' ? 'active-line' : ''}>
+              <span>P1</span>
+              <span>se C[v] &gt; 1 + C[u]</span>
+            </li>
+            <li
+              className={currentLine === 'P2–P4' ? 'active-line' : ''}
+            >
+              <span>P2–P4</span>
+              <span>C[v] ← 1 + C[u]; propagar pelas saídas de v</span>
             </li>
           </ul>
+
+          <h3>Fila de propagação</h3>
+          <div className="queue-box">
+            {current?.queue && current.queue.length ? (
+              current.queue.map((edge, idx) => (
+                <span key={idx} className="queue-item">
+                  {edge.source}→{edge.target}
+                </span>
+              ))
+            ) : (
+              <span className="muted">Fila vazia.</span>
+            )}
+          </div>
         </aside>
       </div>
     </div>

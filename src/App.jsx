@@ -895,6 +895,16 @@ function App() {
     [setEdges],
   );
 
+  const deleteSelectedEdges = useCallback(() => {
+    setEdges((oldEdges) => oldEdges.filter((edge) => !edge.selected));
+    setSnapshots([]);
+    setPaths([]);
+    setSelectedPathIndex(-1);
+    setSelectedAlignmentIndex(null);
+    setCurrentIndex(0);
+    setError(null);
+  }, [setEdges]);
+
   const handleAddNode = useCallback(() => {
     const maxId =
       nodes.length === 0
@@ -1178,6 +1188,14 @@ function App() {
               />
             </label>
           </div>
+          <button
+            type="button"
+            className="edge-delete-button"
+            onClick={deleteSelectedEdges}
+            disabled={!edges.some((edge) => edge.selected)}
+          >
+            Remover arestas selecionadas
+          </button>
 
           <h3>Vértice selecionado</h3>
           {selectedNode ? (

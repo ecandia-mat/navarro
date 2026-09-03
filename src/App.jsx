@@ -125,6 +125,8 @@ function makeSnapshot({
   activeEdgeId = null,
   changedNodes = [],
   queue = [],
+  calculation = null,
+  propagation = null,
 }) {
   return {
     kind,
@@ -139,6 +141,8 @@ function makeSnapshot({
     activeEdgeId,
     changedNodes: [...changedNodes],
     queue: queue.map((edge) => ({ ...edge })),
+    calculation: calculation ? { ...calculation } : null,
+    propagation: propagation ? { ...propagation } : null,
   };
 }
 
@@ -384,8 +388,9 @@ function createRun(nodes, edges, pattern) {
         { edge: null, cost: INF },
       );
 
+      const startCost = i;
+
       if (chars[id] === p) {
-        const startCost = i;
 
         // Mantemos <= para evitar o caminho impossível; em empates,
         // o predecessor vira origem do sufixo.
@@ -470,6 +475,35 @@ function createRun(nodes, edges, pattern) {
           C,
           Cnext,
           activeNode: id,
+          calculation: {
+            nodeId: id,
+            textChar: chars[id],
+            patternChar: p,
+            operation: choice.operation,
+            result: Cnext[id],
+            incoming: incoming.map((edge) => ({
+              edgeId: edge.id,
+              source: edge.source,
+              sourceCost: C[edge.source],
+            })),
+            currentCost: C[id],
+            startCost,
+            matched: chars[id] === p,
+            bestIncomingCost: bestIncoming.cost,
+            bestIncomingEdgeId: bestIncoming.edge?.id ?? null,
+            bestIncomingSource: bestIncoming.edge?.source ?? null,
+            alternatives: chars[id] === p
+              ? []
+              : [
+                  { label: 'deleção no padrão', cost: C[id], source: id },
+                  ...incoming.map((edge) => ({
+                    label: 'substituição',
+                    cost: C[edge.source],
+                    source: edge.source,
+                    edgeId: edge.id,
+                  })),
+                ],
+          },
         }),
       );
     }
@@ -541,6 +575,14 @@ function createRun(nodes, edges, pattern) {
           Cnext,
           activeEdgeId: edgeId,
           queue: remaining,
+          propagation: {
+            edgeId,
+            source,
+            target,
+            oldValue,
+            candidate,
+            reduced: oldValue > candidate,
+          },
         }),
       );
 
@@ -578,6 +620,19 @@ function createRun(nodes, edges, pattern) {
             activeEdgeId: edgeId,
             changedNodes: [target],
             queue: queue.slice(cursor),
+            propagation: {
+              edgeId,
+              source,
+              target,
+              oldValue,
+              candidate,
+              reduced: true,
+              outgoing: outgoing.map((edge) => ({
+                edgeId: edge.edgeId,
+                source: edge.source,
+                target: edge.target,
+              })),
+            },
           }),
         );
       } else {
@@ -592,6 +647,15 @@ function createRun(nodes, edges, pattern) {
             Cnext,
             activeEdgeId: edgeId,
             queue: remaining,
+            propagation: {
+              edgeId,
+              source,
+              target,
+              oldValue,
+              candidate,
+              reduced: false,
+              outgoing: [],
+            },
           }),
         );
       }
@@ -695,6 +759,8 @@ function App() {
   const [paths, setPaths] = useState([]);
   const [selectedPathIndex, setSelectedPathIndex] = useState(-1);
   const [selectedNodeId, setSelectedNodeId] = useState(null);
+  const [selectedAlignmentIndex, setSelectedAlignmentIndex] = useState(null);
+  const [figure4Mode, setFigure4Mode] = useState(true);
   const [error, setError] = useState(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
@@ -718,6 +784,7 @@ function App() {
 
         return {
           ...node,
+          selected: node.id === selectedNodeId,
           data: {
             ...node.data,
             label: node.id,
@@ -803,6 +870,12 @@ function App() {
             : node,
         ),
       );
+      setSnapshots([]);
+      setPaths([]);
+      setSelectedPathIndex(-1);
+      setSelectedAlignmentIndex(null);
+      setCurrentIndex(0);
+      setError(null);
     },
     [selectedNodeId, setNodes],
   );
@@ -840,6 +913,8 @@ function App() {
     };
 
     setNodes((nds) => [...nds, newNode]);
+    setSelectedNodeId(newId);
+    setSelectedAlignmentIndex(null);
   }, [nodes, setNodes]);
 
   const handleReset = useCallback(() => {
@@ -848,6 +923,8 @@ function App() {
     setSnapshots([]);
     setPaths([]);
     setSelectedPathIndex(-1);
+    setSelectedNodeId(null);
+    setSelectedAlignmentIndex(null);
     setCurrentIndex(0);
     setError(null);
     setIsPlaying(false);
@@ -918,8 +995,25 @@ function App() {
 
   const handlePathSelect = useCallback((event) => {
     const value = Number(event.target.value);
-    setSelectedPathIndex(Number.isNaN(value) ? 0 : value);
+    setSelectedPathIndex(Number.isNaN(value) ? -1 : value);
+    setSelectedAlignmentIndex(null);
   }, []);
+
+  const handleAlignmentClick = useCallback((index) => {
+    setSelectedAlignmentIndex(index);
+
+    if (!selectedPath?.alignment) return;
+
+    let textIndex = -1;
+    for (let i = 0; i <= index; i += 1) {
+      if (selectedPath.alignment.steps[i]?.textChar !== '—') {
+        textIndex += 1;
+      }
+    }
+
+    const nodeId = selectedPath.nodes[textIndex];
+    if (nodeId) setSelectedNodeId(nodeId);
+  }, [selectedPath]);
 
   const handleExportJSON = useCallback(() => {
     const data = {
@@ -984,7 +1078,9 @@ function App() {
 
         setSnapshots([]);
         setPaths([]);
-        setSelectedPathIndex(0);
+        setSelectedPathIndex(-1);
+        setSelectedNodeId(null);
+        setSelectedAlignmentIndex(null);
         setCurrentIndex(0);
         setError(null);
       } catch (err) {
@@ -998,6 +1094,14 @@ function App() {
   const currentMessage = current?.message ?? '';
   const currentPatternIndex = current?.patternIndex ?? -1;
   const currentPatternChar = current?.patternChar ?? '';
+  const currentCalculation = current?.calculation ?? null;
+  const currentPropagation = current?.propagation ?? null;
+  const activePropagationEdge = currentPropagation
+    ? edges.find((edge) => edge.id === currentPropagation.edgeId)
+    : null;
+  const figureStep = ['1', '2', '3', '4', '5', 'P1', 'P2–P4'].indexOf(String(currentLine));
+  const figureStepIndex = figureStep >= 0 ? figureStep : 0;
+  const patternChars = pattern.trim().split('');
 
   return (
     <div className="app-shell">
@@ -1028,8 +1132,38 @@ function App() {
           <input
             id="pattern"
             value={pattern}
-            onChange={(e) => setPattern(e.target.value)}
+            onChange={(e) => {
+              setPattern(e.target.value);
+              setSnapshots([]);
+              setPaths([]);
+              setSelectedPathIndex(-1);
+              setSelectedAlignmentIndex(null);
+              setCurrentIndex(0);
+              setError(null);
+            }}
           />
+
+          <div className="pattern-ruler" aria-label="Posições do padrão">
+            <div className="pattern-ruler-title">Posição em patt</div>
+            <div className="pattern-ruler-cells">
+              {patternChars.length ? patternChars.map((char, index) => (
+                <button
+                  type="button"
+                  key={`${char}-${index}`}
+                  className={`pattern-cell ${index === currentPatternIndex ? 'current-pattern-cell' : ''}`}
+                  onClick={() => {
+                    if (!snapshots.length) return;
+                    const target = snapshots.findIndex((snapshot) => snapshot.patternIndex === index);
+                    if (target >= 0) setCurrentIndex(target);
+                  }}
+                  title={`patt[${index + 1}] = “${char}”`}
+                >
+                  <span>{char}</span>
+                  <small>{index + 1}</small>
+                </button>
+              )) : <span className="muted">Digite um padrão.</span>}
+            </div>
+          </div>
 
           <div className="button-grid">
             <button type="button" onClick={handleAddNode}>
@@ -1071,7 +1205,7 @@ function App() {
               onClick={handleRun}
               disabled={!nodes.length}
             >
-              Gerar execução
+              Preparar execução
             </button>
             <button type="button" onClick={handleReset}>
               Reiniciar
@@ -1082,6 +1216,17 @@ function App() {
           </div>
 
           <h3>Controle de animação</h3>
+          <div className="execution-mode-card">
+            <button
+              type="button"
+              className={`mode-toggle ${figure4Mode ? 'mode-toggle-active' : ''}`}
+              onClick={() => setFigure4Mode((value) => !value)}
+              aria-pressed={figure4Mode}
+            >
+              {figure4Mode ? '✓ Modo Figura 4 ativo' : 'Modo Figura 4'}
+            </button>
+            <span className="muted">Sequência: 1 → 2 → 3 → 4 → 5 → P1 → P2–P4.</span>
+          </div>
           <div className="progress">
             <span>
               Passo {totalSteps === 0 ? 0 : currentIndex + 1} de {totalSteps}.
@@ -1181,6 +1326,101 @@ function App() {
 
           
 
+          {figure4Mode && (
+            <div className="figure-guide">
+              <div className="figure-guide-header">
+                <strong>Mapa da Figura 4</strong>
+                <span>{figureStep >= 0 ? `etapa ${figureStep + 1}/7` : 'aguardando'}</span>
+              </div>
+              <div className="figure-steps">
+                {[
+                  ['1', 'Inicializar C'],
+                  ['2', 'Próximo caractere'],
+                  ['3', 'Calcular C′'],
+                  ['4', 'Copiar C′ → C'],
+                  ['5', 'Propagate'],
+                  ['P1', 'Testar aresta'],
+                  ['P2–P4', 'Atualizar e propagar'],
+                ].map(([stepId, label], index) => (
+                  <div
+                    key={stepId}
+                    className={`figure-step ${String(currentLine) === stepId ? 'figure-step-active' : ''}`}
+                  >
+                    <span className="figure-step-number">{stepId}</span>
+                    <span>{label}</span>
+                    {index < 6 && <span className="figure-step-arrow">→</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {currentCalculation && (
+            <div className="calculation-box">
+              <div className="panel-kicker">LINHA 3 · CÁLCULO ATUAL</div>
+              <div className="calculation-title">
+                <strong>v{currentCalculation.nodeId}</strong>
+                <span>t[v{currentCalculation.nodeId}] = “{currentCalculation.textChar}” · patt[i] = “{currentCalculation.patternChar}”</span>
+              </div>
+
+              {currentCalculation.matched ? (
+                <>
+                  <div className="calculation-result success">Caractere coincidente</div>
+                  <div className="formula-block">
+                    <code>C′[v] = min(entradas, i − 1)</code>
+                    <div className="formula-values">
+                      <span>melhor entrada: <b>{currentCalculation.bestIncomingCost >= INF ? '∞' : currentCalculation.bestIncomingCost}</b></span>
+                      <span>i − 1: <b>{currentCalculation.startCost}</b></span>
+                    </div>
+                    <div className="formula-final">C′[v{currentCalculation.nodeId}] = <b>{displayValue(currentCalculation.result)}</b></div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="calculation-result">Caractere diferente · {currentCalculation.operation}</div>
+                  <div className="formula-block">
+                    <code>C′[v] = 1 + min(C[v], entradas)</code>
+                    <div className="formula-values formula-alternatives">
+                      {currentCalculation.alternatives.map((item, index) => (
+                        <span key={`${item.label}-${item.source}-${index}`}>
+                          {item.label} (v{item.source}): <b>{displayValue(item.cost)}</b>
+                        </span>
+                      ))}
+                    </div>
+                    <div className="formula-final">C′[v{currentCalculation.nodeId}] = <b>{displayValue(currentCalculation.result)}</b></div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {currentPropagation && (
+            <div className={`propagation-box ${currentPropagation.reduced ? 'propagation-update-box' : ''}`}>
+              <div className="panel-kicker">PROPAGATE · {currentLine}</div>
+              <div className="propagation-title">
+                <strong>v{currentPropagation.source} → v{currentPropagation.target}</strong>
+                <span>{currentPropagation.reduced ? 'redução encontrada' : 'sem redução'}</span>
+              </div>
+              <div className="propagation-comparison">
+                <div><span>C[v{currentPropagation.target}]</span><b>{displayValue(currentPropagation.oldValue)}</b></div>
+                <div className="comparison-symbol">&gt;</div>
+                <div><span>1 + C[v{currentPropagation.source}]</span><b>{displayValue(currentPropagation.candidate)}</b></div>
+              </div>
+              {currentPropagation.reduced ? (
+                <div className="propagation-consequence">
+                  <strong>P2–P4: C[v{currentPropagation.target}] ← {displayValue(currentPropagation.candidate)}</strong>
+                  {currentPropagation.outgoing?.length > 0 ? (
+                    <div>Arestas de saída adicionadas: {currentPropagation.outgoing.map((edge) => `v${edge.source}→v${edge.target}`).join(', ')}</div>
+                  ) : (
+                    <div>v{currentPropagation.target} não possui arestas de saída.</div>
+                  )}
+                </div>
+              ) : (
+                <div className="propagation-consequence muted">P1 é falsa: nenhuma atualização.</div>
+              )}
+            </div>
+          )}
+
           {paths.length > 0 && (
             <div className="best-path-box">
               <strong>Caminhos de menor distância</strong>
@@ -1219,12 +1459,15 @@ function App() {
                 <span className="alignment-label">Padrão</span>
                 <span className="alignment-seq">
                   {selectedPath.alignment.steps.map((step, idx) => (
-                    <span
+                    <button
+                      type="button"
                       key={`p-${idx}`}
-                      className={`align-op align-op-${step.op}`}
+                      className={`align-op align-op-${step.op} ${selectedAlignmentIndex === idx ? 'alignment-selected' : ''}`}
+                      onClick={() => handleAlignmentClick(idx)}
+                      title="Selecionar esta operação"
                     >
                       {step.patternChar === '—' ? '∅' : step.patternChar}
-                    </span>
+                    </button>
                   ))}
                 </span>
               </div>
@@ -1232,12 +1475,15 @@ function App() {
                 <span className="alignment-label">Texto</span>
                 <span className="alignment-seq">
                   {selectedPath.alignment.steps.map((step, idx) => (
-                    <span
+                    <button
+                      type="button"
                       key={`t-${idx}`}
-                      className={`align-op align-op-${step.op}`}
+                      className={`align-op align-op-${step.op} ${selectedAlignmentIndex === idx ? 'alignment-selected' : ''}`}
+                      onClick={() => handleAlignmentClick(idx)}
+                      title="Selecionar esta operação"
                     >
                       {step.textChar === '—' ? '∅' : step.textChar}
-                    </span>
+                    </button>
                   ))}
                 </span>
               </div>
@@ -1245,12 +1491,15 @@ function App() {
                 <span className="alignment-label">Operações</span>
                 <span className="alignment-seq">
                   {selectedPath.alignment.steps.map((step, idx) => (
-                    <span
+                    <button
+                      type="button"
                       key={`o-${idx}`}
-                      className={`align-op align-op-${step.op}`}
+                      className={`align-op align-op-${step.op} ${selectedAlignmentIndex === idx ? 'alignment-selected' : ''}`}
+                      onClick={() => handleAlignmentClick(idx)}
+                      title="Selecionar esta operação"
                     >
                       {step.op}
-                    </span>
+                    </button>
                   ))}
                 </span>
               </div>
@@ -1293,16 +1542,27 @@ function App() {
             </li>
           </ul>
 
-          <h3>Fila de propagação</h3>
-          <div className="queue-box">
-            {current?.queue && current.queue.length ? (
-              current.queue.map((edge, idx) => (
-                <span key={idx} className="queue-item">
-                  {edge.source}→{edge.target}
-                </span>
-              ))
+          <h3>Propagação de inserções</h3>
+          <div className="queue-box propagation-queue">
+            {currentPropagation ? (
+              <>
+                <div className="queue-current">
+                  <span className="queue-label">ARESTA ATUAL</span>
+                  <span className="queue-item queue-item-current">v{currentPropagation.source} → v{currentPropagation.target}</span>
+                </div>
+                <div className="queue-pending">
+                  <span className="queue-label">PENDENTES</span>
+                  {current?.queue?.length ? (
+                    <div className="queue-list">
+                      {current.queue.map((edge, idx) => (
+                        <span key={`${edge.edgeId}-${idx}`} className="queue-item">v{edge.source} → v{edge.target}</span>
+                      ))}
+                    </div>
+                  ) : <span className="muted">Nenhuma aresta pendente.</span>}
+                </div>
+              </>
             ) : (
-              <span className="muted">Fila vazia.</span>
+              <span className="muted">A propagação ainda não começou.</span>
             )}
           </div>
 
@@ -1332,7 +1592,9 @@ function App() {
                 return (
                   <tr
                     key={id}
-                    className={changedRow ? 'changed-row' : ''}
+                    className={`${changedRow ? 'changed-row' : ''} ${selectedNodeId === id ? 'selected-row' : ''}`}
+                    onClick={() => setSelectedNodeId(id)}
+                    title={`Selecionar v${id}`}
                   >
                     <td>{id}</td>
                     <td>{char}</td>
@@ -1343,6 +1605,12 @@ function App() {
               })}
             </tbody>
           </table>
+
+          <div className="ui-legend">
+            <span><i className="legend-dot legend-active" /> etapa atual</span>
+            <span><i className="legend-dot legend-changed" /> valor reduzido</span>
+            <span><i className="legend-dot legend-path" /> caminho selecionado</span>
+          </div>
         </aside>
       </div>
     </div>

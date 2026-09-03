@@ -548,3 +548,533 @@ tr:last-child td {
   background: #e0f2fe;
   color: #1d4ed8;
 }
+
+/* =========================================================
+   UI Figura 4 — extensões visuais
+   Mantém a identidade visual existente e estiliza apenas
+   os novos componentes introduzidos no JSX.
+   ========================================================= */
+
+.execution-mode-card {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+  border: 1px solid #c7d7df;
+  border-radius: 9px;
+  padding: 9px;
+  background: #f7fafb;
+}
+
+.mode-toggle {
+  width: 100%;
+  border-color: #b8c6d2;
+  background: #fff;
+  font-weight: 700;
+}
+
+.mode-toggle-active {
+  border-color: #0f766e;
+  color: #0f5f5b;
+  background: #ecfdf8;
+  box-shadow: 0 0 0 2px rgb(15 118 110 / 0.08);
+}
+
+.pattern-ruler {
+  margin-top: 11px;
+  border: 1px solid #d5dee5;
+  border-radius: 9px;
+  padding: 9px;
+  background: #f8fafc;
+}
+
+.pattern-ruler-title {
+  margin-bottom: 7px;
+  color: #526275;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pattern-ruler-cells {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.pattern-cell {
+  min-width: 38px;
+  padding: 5px 6px;
+  border: 1px solid #cbd5df;
+  border-radius: 7px;
+  background: #fff;
+  color: #334155;
+  line-height: 1.05;
+}
+
+.pattern-cell span {
+  display: block;
+  font-family: Georgia, serif;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.pattern-cell small {
+  display: block;
+  margin-top: 2px;
+  color: #718096;
+  font-size: 0.61rem;
+}
+
+.pattern-cell:hover {
+  border-color: #0f766e;
+  background: #eefaf8;
+}
+
+.pattern-cell.current-pattern-cell {
+  border-color: #0f766e;
+  color: #fff;
+  background: #0f766e;
+  box-shadow: 0 0 0 2px rgb(15 118 110 / 0.15);
+}
+
+.pattern-cell.current-pattern-cell small {
+  color: #d7edf0;
+}
+
+.figure-guide {
+  margin-top: 10px;
+  border: 1px solid #b8d8d6;
+  border-radius: 10px;
+  padding: 10px;
+  background: linear-gradient(180deg, #f0fdfa, #f8fafc);
+}
+
+.figure-guide-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: #0f5553;
+  font-size: 0.79rem;
+}
+
+.figure-guide-header span {
+  border-radius: 999px;
+  padding: 3px 7px;
+  color: #0f766e;
+  background: #fff;
+  font-size: 0.67rem;
+  font-weight: 800;
+}
+
+.figure-steps {
+  display: grid;
+  gap: 4px;
+}
+
+.figure-step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 42px 1fr 18px;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 4px 5px;
+  color: #526275;
+  font-size: 0.69rem;
+}
+
+.figure-step-number {
+  width: fit-content;
+  min-width: 31px;
+  border-radius: 5px;
+  padding: 3px 5px;
+  color: #0f766e;
+  background: #e6f4f2;
+  font-family: ui-monospace, monospace;
+  font-weight: 900;
+  text-align: center;
+}
+
+.figure-step-arrow {
+  color: #94a3b8;
+  font-weight: 800;
+}
+
+.figure-step-active {
+  border-color: #f3c56b;
+  color: #7c2d12;
+  background: #fff8df;
+  box-shadow: inset 3px 0 0 #d97706;
+  font-weight: 800;
+}
+
+.figure-step-active .figure-step-number {
+  color: #fff;
+  background: #d97706;
+}
+
+.figure-step-active .figure-step-arrow {
+  color: #d97706;
+}
+
+.panel-kicker {
+  margin-bottom: 5px;
+  color: #0f766e;
+  font-size: 0.65rem;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+}
+
+.calculation-box,
+.propagation-box {
+  margin-top: 10px;
+  border: 1px solid #cbd8df;
+  border-radius: 10px;
+  padding: 10px;
+  background: #fff;
+  box-shadow: 0 2px 7px rgb(15 23 42 / 0.04);
+}
+
+.calculation-box {
+  border-left: 4px solid #0f766e;
+}
+
+.calculation-title,
+.propagation-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  color: #243b53;
+  font-size: 0.77rem;
+}
+
+.calculation-title strong,
+.propagation-title strong {
+  color: #0f3d55;
+  font-size: 0.92rem;
+}
+
+.calculation-title span,
+.propagation-title span {
+  color: #65758a;
+  font-size: 0.69rem;
+  text-align: right;
+}
+
+.calculation-result {
+  margin-top: 8px;
+  border-radius: 6px;
+  padding: 6px 7px;
+  color: #7c2d12;
+  background: #fff7ed;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.calculation-result.success {
+  color: #166534;
+  background: #f0fdf4;
+}
+
+.formula-block {
+  margin-top: 7px;
+  border: 1px solid #e1e8ed;
+  border-radius: 7px;
+  padding: 8px;
+  background: #f8fafc;
+}
+
+.formula-block code {
+  display: block;
+  color: #243b53;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.71rem;
+  font-weight: 800;
+  white-space: normal;
+}
+
+.formula-values {
+  display: grid;
+  gap: 4px;
+  margin-top: 7px;
+  color: #526275;
+  font-size: 0.68rem;
+}
+
+.formula-values.formula-alternatives {
+  grid-template-columns: 1fr 1fr;
+}
+
+.formula-final {
+  margin-top: 7px;
+  padding-top: 6px;
+  border-top: 1px dashed #cbd5e1;
+  color: #0f766e;
+  font-size: 0.74rem;
+}
+
+.propagation-box {
+  border-left: 4px solid #2563eb;
+  background: #f8fbff;
+}
+
+.propagation-box.propagation-update-box {
+  border-color: #d97706;
+  background: #fffaf0;
+}
+
+.propagation-comparison {
+  display: grid;
+  grid-template-columns: 1fr 22px 1fr;
+  align-items: center;
+  gap: 5px;
+  margin-top: 9px;
+}
+
+.propagation-comparison > div:not(.comparison-symbol) {
+  display: grid;
+  gap: 3px;
+  border: 1px solid #dbe3e9;
+  border-radius: 7px;
+  padding: 6px;
+  background: #fff;
+}
+
+.propagation-comparison span {
+  color: #64748b;
+  font-size: 0.63rem;
+}
+
+.propagation-comparison b {
+  color: #172033;
+  font-family: ui-monospace, monospace;
+  font-size: 0.82rem;
+}
+
+.comparison-symbol {
+  color: #2563eb;
+  font-size: 1rem;
+  font-weight: 900;
+  text-align: center;
+}
+
+.propagation-consequence {
+  margin-top: 8px;
+  border-radius: 7px;
+  padding: 7px;
+  color: #7c2d12;
+  background: #fff7ed;
+  font-size: 0.69rem;
+  line-height: 1.4;
+}
+
+.propagation-consequence strong {
+  display: block;
+  margin-bottom: 3px;
+}
+
+.propagation-consequence.muted {
+  color: #64748b;
+  background: #f1f5f9;
+}
+
+.queue-box.propagation-queue {
+  display: grid;
+  gap: 8px;
+}
+
+.queue-current,
+.queue-pending {
+  display: grid;
+  gap: 5px;
+}
+
+.queue-label {
+  color: #64748b;
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+}
+
+.queue-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.queue-item-current {
+  border: 1px solid #fca5a5;
+  color: #9f1239;
+  background: #fff1f2;
+  box-shadow: 0 0 0 2px rgb(225 29 72 / 0.08);
+}
+
+.alignment-box {
+  overflow-x: auto;
+}
+
+.alignment-seq {
+  flex-wrap: nowrap;
+}
+
+.alignment-box .align-op {
+  flex: 0 0 24px;
+  min-width: 24px;
+  border: 1px solid transparent;
+  padding: 4px 3px;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.alignment-box .align-op:hover {
+  border-color: #94a3b8;
+  transform: translateY(-1px);
+}
+
+.alignment-box .alignment-selected {
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 2px rgb(124 58 237 / 0.16);
+  transform: translateY(-1px);
+}
+
+.status-panel tr {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.status-panel tbody tr:hover {
+  background: #f0fdfa;
+}
+
+.status-panel tbody tr.selected-row {
+  background: #ede9fe;
+  box-shadow: inset 3px 0 0 #7c3aed;
+}
+
+.ui-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 10px;
+  color: #64748b;
+  font-size: 0.67rem;
+}
+
+.ui-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.legend-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.legend-active {
+  background: #e11d48;
+}
+
+.legend-changed {
+  background: #d97706;
+}
+
+.legend-path {
+  background: #7c3aed;
+}
+
+/* Deixa a coluna de estado mais confortável para os novos painéis. */
+.status-panel {
+  scrollbar-width: thin;
+}
+
+.status-panel h3 {
+  border-top: 1px solid #edf1f4;
+  padding-top: 12px;
+}
+
+/* Evita que os botões do alinhamento herdem o aspecto dos botões de ação. */
+.alignment-box button.align-op {
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+/* Ajuste da legenda do canvas para não competir com o grafo. */
+.canvas-caption {
+  pointer-events: none;
+}
+
+/* Responsividade da nova interface */
+@media (max-width: 1250px) {
+  .layout {
+    grid-template-columns: 255px minmax(420px, 1fr);
+  }
+
+  .status-panel {
+    grid-column: span 2;
+    max-height: 720px;
+  }
+
+  .figure-steps {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .figure-step {
+    grid-template-columns: 35px 1fr;
+  }
+
+  .figure-step-arrow {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .pattern-ruler-cells {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .formula-values.formula-alternatives {
+    grid-template-columns: 1fr;
+  }
+
+  .propagation-comparison {
+    grid-template-columns: 1fr;
+  }
+
+  .comparison-symbol {
+    transform: rotate(90deg);
+  }
+
+  .figure-steps {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .figure-step {
+    grid-template-columns: 42px 1fr;
+  }
+
+  .figure-step-arrow {
+    display: none;
+  }
+
+  .calculation-title,
+  .propagation-title {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .calculation-title span,
+  .propagation-title span {
+    text-align: left;
+  }
+}

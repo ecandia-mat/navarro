@@ -99,7 +99,6 @@ function cloneMap(map) {
 function copyPath(path) {
   return {
     nodes: [...(path?.nodes || [])],
-    edgeIds: [...(path?.edgeIds || [])],
     end: path?.end ?? null,
     distance: path?.distance ?? INF,
     alignment: path?.alignment
@@ -121,7 +120,7 @@ function makeSnapshot({
   patternChar,
   C,
   Cnext,
-  bestPath = { nodes: [], edgeIds: [], end: null, distance: INF },
+  bestPath = { nodes: [], end: null, distance: INF },
   activeNode = null,
   activeEdgeId = null,
   changedNodes = [],
@@ -156,14 +155,12 @@ function stateKey(patternIndex, nodeId) {
 }
 
 /**
- * Reconstrói uma única caminhada + alinhamento completo
- * para um vértice terminal end, usando o mapa de ponteiros.
+ * Reconstrói uma caminhada + alinhamento completo (padrão ↔ texto) para um vértice final.
  */
 function reconstructOnePath(end, finalIndex, back, chars, pattern, C) {
   if (C[end] >= INF) {
     return {
       nodes: [],
-      edgeIds: [],
       end,
       distance: C[end],
       alignment: null,
@@ -171,7 +168,6 @@ function reconstructOnePath(end, finalIndex, back, chars, pattern, C) {
   }
 
   const reversedNodes = [];
-  const reversedEdgeIds = [];
   const reversedSteps = [];
   const visitedStates = new Set();
 
@@ -190,8 +186,6 @@ function reconstructOnePath(end, finalIndex, back, chars, pattern, C) {
     const textChar = chars[v];
 
     if (pointer.kind === 'start') {
-      // início de sufixo: todos os caracteres anteriores do padrão
-      // foram deletados.
       reversedNodes.push(v);
       for (let k = i; k >= 0; k -= 1) {
         reversedSteps.push({
@@ -210,8 +204,7 @@ function reconstructOnePath(end, finalIndex, back, chars, pattern, C) {
         op: '=',
       });
       reversedNodes.push(v);
-      if (pointer.edgeId) reversedEdgeIds.push(pointer.edgeId);
-      i = pointer.prevIndex; // i - 1
+      i = pointer.prevIndex;
       v = pointer.prevNode;
       continue;
     }
@@ -223,8 +216,7 @@ function reconstructOnePath(end, finalIndex, back, chars, pattern, C) {
         op: 'X',
       });
       reversedNodes.push(v);
-      if (pointer.edgeId) reversedEdgeIds.push(pointer.edgeId);
-      i = pointer.prevIndex; // i - 1
+      i = pointer.prevIndex;
       v = pointer.prevNode;
       continue;
     }
@@ -235,33 +227,27 @@ function reconstructOnePath(end, finalIndex, back, chars, pattern, C) {
         textChar: '—',
         op: 'D',
       });
-      // vértice permanece o mesmo
-      i = pointer.prevIndex; // i - 1
+      i = pointer.prevIndex;
       v = pointer.prevNode;
       continue;
     }
 
     if (pointer.kind === 'insert-text-char') {
-      // inserção no texto: consumimos o caractere do vértice atual v,
-      // mas não avançamos no padrão.
       reversedSteps.push({
         patternChar: '—',
         textChar,
         op: 'I',
       });
       reversedNodes.push(v);
-      if (pointer.edgeId) reversedEdgeIds.push(pointer.edgeId);
-      i = pointer.prevIndex; // mesmo i
+      i = pointer.prevIndex;
       v = pointer.prevNode;
       continue;
     }
 
-    // Qualquer outra coisa encerra.
     break;
   }
 
-  // Se ainda houver caracteres do padrão não consumidos (i >= 0),
-  // eles correspondem a deleções iniciais.
+  // Se ainda restarem caracteres no padrão, são deleções iniciais.
   for (let k = i; k >= 0; k -= 1) {
     reversedSteps.push({
       patternChar: pattern[k],
@@ -271,7 +257,6 @@ function reconstructOnePath(end, finalIndex, back, chars, pattern, C) {
   }
 
   const nodes = reversedNodes.reverse();
-  const edgeIds = reversedEdgeIds.reverse();
   const steps = reversedSteps.reverse();
 
   const patternSeq = steps.map((s) => s.patternChar).join('');
@@ -280,7 +265,6 @@ function reconstructOnePath(end, finalIndex, back, chars, pattern, C) {
 
   return {
     nodes,
-    edgeIds,
     end,
     distance: C[end],
     alignment: {
@@ -293,7 +277,7 @@ function reconstructOnePath(end, finalIndex, back, chars, pattern, C) {
 }
 
 /**
- * Todos os caminhos de menor custo, com alinhamento completo.
+ * Todos os caminhos de menor custo (sem duplicar), com alinhamento completo.
  */
 function reconstructAllPaths(C, finalIndex, back, chars, pattern) {
   const candidates = Object.entries(C).filter(([, value]) => value < INF);
@@ -313,7 +297,7 @@ function reconstructAllPaths(C, finalIndex, back, chars, pattern) {
     const path = reconstructOnePath(end, finalIndex, back, chars, pattern, C);
     if (!path.nodes.length) continue;
 
-    const key = `${path.nodes.join(',')}|${path.edgeIds.join(',')}`;
+    const key = path.nodes.join(',');
     if (seenKeys.has(key)) continue;
 
     seenKeys.add(key);
@@ -324,7 +308,7 @@ function reconstructAllPaths(C, finalIndex, back, chars, pattern) {
 }
 
 /**
- * Algoritmo de Navarro + reconstrução de todos os caminhos mínimos.
+ * Algoritmo de Navarro + reconstrução dos caminhos mínimos.
  */
 function createRun(nodes, edges, pattern) {
   const cleanPattern = pattern.trim();
@@ -403,7 +387,9 @@ function createRun(nodes, edges, pattern) {
       if (chars[id] === p) {
         const startCost = i;
 
-        if (bestIncoming.cost <= startCost) {
+        // Mantemos <= para evitar o caminho impossível; em empates,
+        // o predecessor vira origem do sufixo.
+        if (bestIncoming.cost <= startCost && bestIncoming.edge) {
           Cnext[id] = bestIncoming.cost;
           choices[id] = {
             kind: 'match',
@@ -599,7 +585,7 @@ function createRun(nodes, edges, pattern) {
           makeSnapshot({
             kind: 'propagate-nochange',
             line: 'P1',
-            message: 'Nenhuma atualização em v' + target + ': a condição é falsa.',
+            message: `Nenhuma atualização em v${target}: a condição é falsa.`,
             patternIndex: i,
             patternChar: p,
             C,
@@ -635,13 +621,8 @@ function createRun(nodes, edges, pattern) {
     chars,
     cleanPattern,
   );
-  const bestPath = paths[0] || {
-    nodes: [],
-    edgeIds: [],
-    end: null,
-    distance: INF,
-    alignment: null,
-  };
+  const bestPath =
+    paths[0] || { nodes: [], end: null, distance: INF, alignment: null };
 
   const pathText = bestPath.nodes.length
     ? bestPath.nodes.map((id) => `v${id}`).join(' → ')
@@ -754,7 +735,20 @@ function App() {
   );
 
   const decoratedEdges = useMemo(() => {
-    const pathEdgeIds = new Set(selectedPath?.edgeIds || []);
+    const pathEdgeIds = new Set();
+
+    if (selectedPath && selectedPath.nodes.length > 1) {
+      for (let i = 0; i < selectedPath.nodes.length - 1; i += 1) {
+        const u = selectedPath.nodes[i];
+        const v = selectedPath.nodes[i + 1];
+
+        const edge = edges.find(
+          (e) => e.source === u && e.target === v,
+        );
+        if (edge) pathEdgeIds.add(edge.id);
+      }
+    }
+
     const activeEdgeId = current?.activeEdgeId ?? null;
 
     return edges.map((edge) => {
@@ -862,11 +856,14 @@ function App() {
     setCurrentIndex((idx) => Math.max(0, idx - 1));
   }, []);
 
-  const handleNext = useCallback(() => {
-    setCurrentIndex((idx) =>
-      totalSteps === 0 ? 0 : Math.min(totalSteps - 1, idx + 1),
-    );
-  }, [totalSteps]);
+  const handleNext = useCallback(
+    () => {
+      setCurrentIndex((idx) =>
+        totalSteps === 0 ? 0 : Math.min(totalSteps - 1, idx + 1),
+      );
+    },
+    [totalSteps],
+  );
 
   const handlePlayStop = useCallback(() => {
     if (isPlaying) {
@@ -882,7 +879,6 @@ function App() {
       setCurrentIndex((idx) => {
         const next = idx + 1;
         if (next >= snapshots.length) {
-          // para no final
           setIsPlaying(false);
           if (playRef.current) clearInterval(playRef.current);
           return idx;
@@ -902,25 +898,6 @@ function App() {
     const value = Number(event.target.value);
     setSelectedPathIndex(Number.isNaN(value) ? 0 : value);
   }, []);
-
-  const handleNodeCharChange = useCallback(
-    (id, char) => {
-      setNodes((nds) =>
-        nds.map((node) =>
-          node.id === id
-            ? {
-                ...node,
-                data: {
-                  ...node.data,
-                  char: char || '?',
-                },
-              }
-            : node,
-        ),
-      );
-    },
-    [setNodes],
-  );
 
   const handleExportJSON = useCallback(() => {
     const data = {
@@ -1023,7 +1000,7 @@ function App() {
             arestas para montar o grafo em que o padrão será buscado.
           </p>
 
-          abel className="field-label" htmlFor="pattern">
+          <label className="field-label" htmlFor="pattern">
             Padrão (patt)
           </label>
           <input
@@ -1036,7 +1013,7 @@ function App() {
             <button type="button" onClick={handleAddNode}>
               Adicionar vértice
             </button>
-            abel className="import-label">
+            <label className="import-label">
               Importar JSON
               <input
                 type="file"
@@ -1156,7 +1133,7 @@ function App() {
             <div className="best-path-box">
               <strong>Caminhos de menor distância</strong>
               <div className="best-path-select">
-                abel htmlFor="pathSelect">Escolha o caminho:</label>
+                <label htmlFor="pathSelect">Escolha o caminho:</label>
                 <select
                   id="pathSelect"
                   value={selectedPathIndex}
@@ -1188,9 +1165,7 @@ function App() {
                       key={`p-${idx}`}
                       className={`align-op align-op-${step.op}`}
                     >
-                      {step.patternChar === '—'
-                        ? '∅'
-                        : step.patternChar}
+                      {step.patternChar === '—' ? '∅' : step.patternChar}
                     </span>
                   ))}
                 </span>
@@ -1228,29 +1203,29 @@ function App() {
 
           <h3>Pseudocódigo</h3>
           <ul className="pseudocode">
-            >
+            <li className={currentLine === 1 ? 'active-line' : ''}>
               <span>1</span>
               <span>Inicializar C[v] ← 0 para todo v ∈ V.</span>
             </li>
-            >
+            <li className={currentLine === 2 ? 'active-line' : ''}>
               <span>2</span>
               <span>
                 Para i = 1..m, processar patt[i] e calcular C′[v] para todo
                 v.
               </span>
             </li>
-            >
+            <li className={currentLine === 3 ? 'active-line' : ''}>
               <span>3</span>
               <span>
                 Calcular C′[v] considerando casamento, substituição,
                 deleção no padrão.
               </span>
             </li>
-            >
+            <li className={currentLine === 4 ? 'active-line' : ''}>
               <span>4</span>
               <span>C[v] ← C′[v] para todo v.</span>
             </li>
-            >
+            <li className={currentLine === 5 ? 'active-line' : ''}>
               <span>5</span>
               <span>
                 Propagar inserções no texto: enquanto houver aresta (u, v)

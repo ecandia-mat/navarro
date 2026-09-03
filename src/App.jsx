@@ -1139,36 +1139,36 @@ function App() {
 
           
 
-            {paths.length > 0 && (
-              <div className="best-path-box">
-                <strong>Caminhos de menor distância</strong>
-                <div className="best-path-select">
-                  abel htmlFor="pathSelect">Escolha o caminho:</label>
-                  <select
-                    id="pathSelect"
-                    value={selectedPathIndex}
-                    onChange={handlePathSelect}
-                  >
-                    {/* opção vazia / nenhum caminho selecionado */}
-                    <option value={-1}>Nenhum (não destacar)</option>
+          {paths.length > 0 && (
+            <div className="best-path-box">
+              <strong>Caminhos de menor distância</strong>
+              <div className="best-path-select">
+                abel htmlFor="pathSelect">Escolha o caminho:</label>
+                <select
+                  id="pathSelect"
+                  value={selectedPathIndex}
+                  onChange={handlePathSelect}
+                >
+                  {/* opção vazia / nenhum caminho selecionado */}
+                  <option value={-1}>Nenhum (não destacar)</option>
 
-                    {paths.map((path, idx) => (
-                      <option key={idx} value={idx}>
-                        #{idx + 1}:{' '}
-                        {path.nodes.map((id) => `v${id}`).join(' → ')}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {selectedPath && (
-                  <div>
-                    Distância de edição desse caminho:{' '}
-                    {displayValue(selectedPath.distance)}
-                  </div>
-                )}
+                  {paths.map((path, idx) => (
+                    <option key={idx} value={idx}>
+                      #{idx + 1}:{' '}
+                      {path.nodes.map((id) => `v${id}`).join(' → ')}
+                    </option>
+                  ))}
+                </select>
               </div>
-            )}
+
+              {selectedPath && (
+                <div>
+                  Distância de edição desse caminho:{' '}
+                  {displayValue(selectedPath.distance)}
+                </div>
+              )}
+            </div>
+          )}
 
           {selectedPath?.alignment && (
             <div className="alignment-box">

@@ -119,7 +119,12 @@ function reconstructBestPath(C, finalIndex, back) {
     const pointer = back.get(key);
     if (!pointer || pointer.kind === 'start') break;
 
-    if (pointer.edgeId) {
+    if (
+      pointer.edgeId &&
+      pointer.prevNode !== null &&
+      pointer.prevNode !== undefined &&
+      pointer.prevNode !== currentNode
+    ) {
       reversedEdgeIds.push(pointer.edgeId);
     }
 
@@ -199,7 +204,7 @@ function createRun(nodes, edges, pattern) {
       if (chars[id] === p) {
         const startCost = i;
 
-        if (bestIncoming.cost <= startCost) {
+        if (bestIncoming.cost < startCost) {
           Cnext[id] = bestIncoming.cost;
           choices[id] = {
             kind: 'match',

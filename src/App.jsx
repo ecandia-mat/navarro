@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   addEdge,
   Background,
@@ -16,19 +22,69 @@ import {
 const INF = 1_000_000;
 
 const initialNodes = [
-  { id: '1', type: 'textNode', position: { x: 70, y: 240 }, data: { char: 'b', C: 0, Cnext: null } },
-  { id: '2', type: 'textNode', position: { x: 290, y: 240 }, data: { char: 'a', C: 0, Cnext: null } },
-  { id: '3', type: 'textNode', position: { x: 470, y: 100 }, data: { char: 'b', C: 0, Cnext: null } },
-  { id: '4', type: 'textNode', position: { x: 260, y: 100 }, data: { char: 'b', C: 0, Cnext: null } },
-  { id: '5', type: 'textNode', position: { x: 500, y: 320 }, data: { char: 'b', C: 0, Cnext: null } },
+  {
+    id: '1',
+    type: 'textNode',
+    position: { x: 70, y: 240 },
+    data: { char: 'b', C: 0, Cnext: null },
+  },
+  {
+    id: '2',
+    type: 'textNode',
+    position: { x: 290, y: 240 },
+    data: { char: 'a', C: 0, Cnext: null },
+  },
+  {
+    id: '3',
+    type: 'textNode',
+    position: { x: 470, y: 100 },
+    data: { char: 'b', C: 0, Cnext: null },
+  },
+  {
+    id: '4',
+    type: 'textNode',
+    position: { x: 260, y: 100 },
+    data: { char: 'b', C: 0, Cnext: null },
+  },
+  {
+    id: '5',
+    type: 'textNode',
+    position: { x: 500, y: 320 },
+    data: { char: 'b', C: 0, Cnext: null },
+  },
 ];
 
 const initialEdges = [
-  { id: 'e1-2', source: '1', target: '2', markerEnd: { type: MarkerType.ArrowClosed } },
-  { id: 'e2-3', source: '2', target: '3', markerEnd: { type: MarkerType.ArrowClosed } },
-  { id: 'e3-4', source: '3', target: '4', markerEnd: { type: MarkerType.ArrowClosed } },
-  { id: 'e4-2', source: '4', target: '2', markerEnd: { type: MarkerType.ArrowClosed } },
-  { id: 'e2-5', source: '2', target: '5', markerEnd: { type: MarkerType.ArrowClosed } },
+  {
+    id: 'e1-2',
+    source: '1',
+    target: '2',
+    markerEnd: { type: MarkerType.ArrowClosed },
+  },
+  {
+    id: 'e2-3',
+    source: '2',
+    target: '3',
+    markerEnd: { type: MarkerType.ArrowClosed },
+  },
+  {
+    id: 'e3-4',
+    source: '3',
+    target: '4',
+    markerEnd: { type: MarkerType.ArrowClosed },
+  },
+  {
+    id: 'e4-2',
+    source: '4',
+    target: '2',
+    markerEnd: { type: MarkerType.ArrowClosed },
+  },
+  {
+    id: 'e2-5',
+    source: '2',
+    target: '5',
+    markerEnd: { type: MarkerType.ArrowClosed },
+  },
 ];
 
 function displayValue(value) {
@@ -46,6 +102,14 @@ function copyPath(path) {
     edgeIds: [...(path?.edgeIds || [])],
     end: path?.end ?? null,
     distance: path?.distance ?? INF,
+    alignment: path?.alignment
+      ? {
+          patternSeq: path.alignment.patternSeq,
+          textSeq: path.alignment.textSeq,
+          opsSeq: path.alignment.opsSeq,
+          steps: [...path.alignment.steps],
+        }
+      : null,
   };
 }
 
@@ -91,74 +155,200 @@ function stateKey(patternIndex, nodeId) {
   return `${patternIndex}|${nodeId}`;
 }
 
-function reconstructBestPath(C, finalIndex, back) {
-  const candidates = Object.entries(C)
-    .filter(([, value]) => value < INF)
-    .sort(([idA, costA], [idB, costB]) => (
-      costA - costB || String(idA).localeCompare(String(idB))
-    ));
-
-  if (!candidates.length) {
-    return { nodes: [], edgeIds: [], end: null, distance: INF };
+/**
+ * Reconstrói uma única caminhada + alinhamento completo
+ * para um vértice terminal end, usando o mapa de ponteiros.
+ */
+function reconstructOnePath(end, finalIndex, back, chars, pattern, C) {
+  if (C[end] >= INF) {
+    return {
+      nodes: [],
+      edgeIds: [],
+      end,
+      distance: C[end],
+      alignment: null,
+    };
   }
 
-  const [end, distance] = candidates[0];
   const reversedNodes = [];
   const reversedEdgeIds = [];
+  const reversedSteps = [];
   const visitedStates = new Set();
-  let currentIndex = finalIndex;
-  let currentNode = end;
 
-  while (currentIndex >= 0 && currentNode !== null && currentNode !== undefined) {
-    const key = stateKey(currentIndex, currentNode);
+  let i = finalIndex;
+  let v = end;
+
+  while (i >= 0 && v !== null && v !== undefined) {
+    const key = stateKey(i, v);
     if (visitedStates.has(key)) break;
-
     visitedStates.add(key);
-    reversedNodes.push(currentNode);
 
     const pointer = back.get(key);
-    if (!pointer || pointer.kind === 'start') break;
+    if (!pointer) break;
 
-    if (
-      pointer.edgeId &&
-      pointer.prevNode !== null &&
-      pointer.prevNode !== undefined &&
-      pointer.prevNode !== currentNode
-    ) {
-      reversedEdgeIds.push(pointer.edgeId);
+    const patternChar = i >= 0 ? pattern[i] : '—';
+    const textChar = chars[v];
+
+    if (pointer.kind === 'start') {
+      // início de sufixo: todos os caracteres anteriores do padrão
+      // foram deletados.
+      reversedNodes.push(v);
+      for (let k = i; k >= 0; k -= 1) {
+        reversedSteps.push({
+          patternChar: pattern[k],
+          textChar: '—',
+          op: 'D',
+        });
+      }
+      break;
     }
 
-    currentIndex = pointer.prevIndex;
-    currentNode = pointer.prevNode;
+    if (pointer.kind === 'match') {
+      reversedSteps.push({
+        patternChar,
+        textChar,
+        op: '=',
+      });
+      reversedNodes.push(v);
+      if (pointer.edgeId) reversedEdgeIds.push(pointer.edgeId);
+      i = pointer.prevIndex; // i - 1
+      v = pointer.prevNode;
+      continue;
+    }
+
+    if (pointer.kind === 'substitute') {
+      reversedSteps.push({
+        patternChar,
+        textChar,
+        op: 'X',
+      });
+      reversedNodes.push(v);
+      if (pointer.edgeId) reversedEdgeIds.push(pointer.edgeId);
+      i = pointer.prevIndex; // i - 1
+      v = pointer.prevNode;
+      continue;
+    }
+
+    if (pointer.kind === 'delete-pattern-char') {
+      reversedSteps.push({
+        patternChar,
+        textChar: '—',
+        op: 'D',
+      });
+      // vértice permanece o mesmo
+      i = pointer.prevIndex; // i - 1
+      v = pointer.prevNode;
+      continue;
+    }
+
+    if (pointer.kind === 'insert-text-char') {
+      // inserção no texto: consumimos o caractere do vértice atual v,
+      // mas não avançamos no padrão.
+      reversedSteps.push({
+        patternChar: '—',
+        textChar,
+        op: 'I',
+      });
+      reversedNodes.push(v);
+      if (pointer.edgeId) reversedEdgeIds.push(pointer.edgeId);
+      i = pointer.prevIndex; // mesmo i
+      v = pointer.prevNode;
+      continue;
+    }
+
+    // Qualquer outra coisa encerra.
+    break;
   }
 
+  // Se ainda houver caracteres do padrão não consumidos (i >= 0),
+  // eles correspondem a deleções iniciais.
+  for (let k = i; k >= 0; k -= 1) {
+    reversedSteps.push({
+      patternChar: pattern[k],
+      textChar: '—',
+      op: 'D',
+    });
+  }
+
+  const nodes = reversedNodes.reverse();
+  const edgeIds = reversedEdgeIds.reverse();
+  const steps = reversedSteps.reverse();
+
+  const patternSeq = steps.map((s) => s.patternChar).join('');
+  const textSeq = steps.map((s) => s.textChar).join('');
+  const opsSeq = steps.map((s) => s.op).join('');
+
   return {
-    nodes: reversedNodes.reverse(),
-    edgeIds: reversedEdgeIds.reverse(),
+    nodes,
+    edgeIds,
     end,
-    distance,
+    distance: C[end],
+    alignment: {
+      steps,
+      patternSeq,
+      textSeq,
+      opsSeq,
+    },
   };
 }
 
+/**
+ * Todos os caminhos de menor custo, com alinhamento completo.
+ */
+function reconstructAllPaths(C, finalIndex, back, chars, pattern) {
+  const candidates = Object.entries(C).filter(([, value]) => value < INF);
+  if (!candidates.length) {
+    return [];
+  }
+
+  const minDist = Math.min(...candidates.map(([, cost]) => cost));
+  const ends = candidates
+    .filter(([, cost]) => cost === minDist)
+    .map(([id]) => id);
+
+  const paths = [];
+  const seenKeys = new Set();
+
+  for (const end of ends) {
+    const path = reconstructOnePath(end, finalIndex, back, chars, pattern, C);
+    if (!path.nodes.length) continue;
+
+    const key = `${path.nodes.join(',')}|${path.edgeIds.join(',')}`;
+    if (seenKeys.has(key)) continue;
+
+    seenKeys.add(key);
+    paths.push(path);
+  }
+
+  return paths;
+}
+
+/**
+ * Algoritmo de Navarro + reconstrução de todos os caminhos mínimos.
+ */
 function createRun(nodes, edges, pattern) {
   const cleanPattern = pattern.trim();
 
   if (!cleanPattern) {
-    return { error: 'Informe um padrão não vazio.', snapshots: [] };
+    return { error: 'Informe um padrão não vazio.', snapshots: [], paths: [] };
   }
-
   if (!nodes.length) {
-    return { error: 'Crie pelo menos um vértice.', snapshots: [] };
+    return { error: 'Crie pelo menos um vértice.', snapshots: [], paths: [] };
   }
 
-  const chars = Object.fromEntries(nodes.map((node) => [node.id, node.data.char || '?']));
+  const chars = Object.fromEntries(
+    nodes.map((node) => [node.id, node.data.char || '?']),
+  );
   const ids = nodes.map((node) => node.id);
+
   const snapshots = [];
 
   let C = Object.fromEntries(ids.map((id) => [id, 0]));
   let Cnext = Object.fromEntries(ids.map((id) => [id, null]));
 
   const back = new Map();
+
+  // estado inicial: i = -1
   for (const id of ids) {
     back.set(stateKey(-1, id), {
       kind: 'start',
@@ -169,35 +359,44 @@ function createRun(nodes, edges, pattern) {
     });
   }
 
-  snapshots.push(makeSnapshot({
-    kind: 'init',
-    line: 1,
-    message: 'Inicialização: C[v] ← 0 para todo vértice v.',
-    patternIndex: -1,
-    patternChar: '',
-    C,
-    Cnext,
-  }));
+  snapshots.push(
+    makeSnapshot({
+      kind: 'init',
+      line: 1,
+      message: 'Inicialização: C[v] ← 0 para todo vértice v.',
+      patternIndex: -1,
+      patternChar: '',
+      C,
+      Cnext,
+    }),
+  );
 
   for (let i = 0; i < cleanPattern.length; i += 1) {
     const p = cleanPattern[i];
+
     Cnext = Object.fromEntries(ids.map((id) => [id, null]));
     const choices = Object.fromEntries(ids.map((id) => [id, null]));
 
-    snapshots.push(makeSnapshot({
-      kind: 'iteration',
-      line: 2,
-      message: `Início da iteração i = ${i + 1}: processando patt[${i + 1}] = “${p}”.`,
-      patternIndex: i,
-      patternChar: p,
-      C,
-      Cnext,
-    }));
+    snapshots.push(
+      makeSnapshot({
+        kind: 'iteration',
+        line: 2,
+        message: `Início da iteração i = ${i + 1}: processando patt[${i + 1}] = “${p}”.`,
+        patternIndex: i,
+        patternChar: p,
+        C,
+        Cnext,
+      }),
+    );
 
     for (const id of ids) {
       const incoming = predecessorEdges(id, edges);
+
       const bestIncoming = incoming.reduce(
-        (best, edge) => (C[edge.source] < best.cost ? { edge, cost: C[edge.source] } : best),
+        (best, edge) =>
+          C[edge.source] < best.cost
+            ? { edge, cost: C[edge.source] }
+            : best,
         { edge: null, cost: INF },
       );
 
@@ -244,9 +443,8 @@ function createRun(nodes, edges, pattern) {
         ];
 
         const best = alternatives.reduce(
-          (currentBest, candidate) => (
-            candidate.cost < currentBest.cost ? candidate : currentBest
-          ),
+          (currentBest, candidate) =>
+            candidate.cost < currentBest.cost ? candidate : currentBest,
           {
             cost: INF,
             kind: 'none',
@@ -262,21 +460,32 @@ function createRun(nodes, edges, pattern) {
       }
 
       const choice = choices[id];
-      const origin = choice.prevNode === null ? 'início de um novo sufixo' : `v${choice.prevNode}`;
-      const formula = chars[id] === p
-        ? `t[${id}] = “${chars[id]}” coincide com patt[${i + 1}] = “${p}”. C′[${id}] = ${displayValue(Cnext[id])}; origem: ${origin}.`
-        : `t[${id}] = “${chars[id]}” difere de patt[${i + 1}] = “${p}”. C′[${id}] = ${displayValue(Cnext[id])}; operação: ${choice.operation}; origem: ${origin}.`;
+      const origin =
+        choice.prevNode === null
+          ? 'início de um novo sufixo'
+          : `v${choice.prevNode}`;
 
-      snapshots.push(makeSnapshot({
-        kind: 'compute',
-        line: 3,
-        message: formula,
-        patternIndex: i,
-        patternChar: p,
-        C,
-        Cnext,
-        activeNode: id,
-      }));
+      const formula =
+        chars[id] === p
+          ? `t[${id}] = “${chars[id]}” coincide com patt[${i + 1}] = “${p}”. C′[${id}] = ${displayValue(
+              Cnext[id],
+            )}; origem: ${origin}.`
+          : `t[${id}] = “${chars[id]}” difere de patt[${i + 1}] = “${p}”. C′[${id}] = ${displayValue(
+              Cnext[id],
+            )}; operação: ${choice.operation}; origem: ${origin}.`;
+
+      snapshots.push(
+        makeSnapshot({
+          kind: 'compute',
+          line: 3,
+          message: formula,
+          patternIndex: i,
+          patternChar: p,
+          C,
+          Cnext,
+          activeNode: id,
+        }),
+      );
     }
 
     C = cloneMap(Cnext);
@@ -292,29 +501,37 @@ function createRun(nodes, edges, pattern) {
       });
     }
 
-    snapshots.push(makeSnapshot({
-      kind: 'copy',
-      line: 4,
-      message: 'Linha 4: C[v] ← C′[v] para todos os vértices.',
-      patternIndex: i,
-      patternChar: p,
-      C,
-      Cnext,
-    }));
+    snapshots.push(
+      makeSnapshot({
+        kind: 'copy',
+        line: 4,
+        message: 'Linha 4: C[v] ← C′[v] para todos os vértices.',
+        patternIndex: i,
+        patternChar: p,
+        C,
+        Cnext,
+      }),
+    );
 
-    const queue = edges.map((edge) => ({ edgeId: edge.id, source: edge.source, target: edge.target }));
+    const queue = edges.map((edge) => ({
+      edgeId: edge.id,
+      source: edge.source,
+      target: edge.target,
+    }));
     let cursor = 0;
 
-    snapshots.push(makeSnapshot({
-      kind: 'propagation-start',
-      line: 5,
-      message: `Início da propagação: ${queue.length} aresta(s) serão examinadas inicialmente.`,
-      patternIndex: i,
-      patternChar: p,
-      C,
-      Cnext,
-      queue,
-    }));
+    snapshots.push(
+      makeSnapshot({
+        kind: 'propagation-start',
+        line: 5,
+        message: `Início da propagação: ${queue.length} aresta(s) serão examinadas inicialmente.`,
+        patternIndex: i,
+        patternChar: p,
+        C,
+        Cnext,
+        queue,
+      }),
+    );
 
     while (cursor < queue.length) {
       const currentEdge = queue[cursor];
@@ -325,21 +542,24 @@ function createRun(nodes, edges, pattern) {
       const candidate = C[source] >= INF ? INF : C[source] + 1;
       const remaining = queue.slice(cursor);
 
-      snapshots.push(makeSnapshot({
-        kind: 'propagate-test',
-        line: 'P1',
-        message: `Propagate(${source}, ${target}): testar C[${target}] > 1 + C[${source}]. Temos ${displayValue(oldValue)} > ${displayValue(candidate)}?`,
-        patternIndex: i,
-        patternChar: p,
-        C,
-        Cnext,
-        activeEdgeId: edgeId,
-        queue: remaining,
-      }));
+      snapshots.push(
+        makeSnapshot({
+          kind: 'propagate-test',
+          line: 'P1',
+          message: `Propagate(${source}, ${target}): testar C[${target}] > 1 + C[${source}]. Temos ${displayValue(
+            oldValue,
+          )} > ${displayValue(candidate)}?`,
+          patternIndex: i,
+          patternChar: p,
+          C,
+          Cnext,
+          activeEdgeId: edgeId,
+          queue: remaining,
+        }),
+      );
 
       if (oldValue > candidate) {
         C[target] = candidate;
-
         back.set(stateKey(i, target), {
           kind: 'insert-text-char',
           prevIndex: i,
@@ -355,64 +575,94 @@ function createRun(nodes, edges, pattern) {
         }));
         queue.push(...outgoing);
 
-        snapshots.push(makeSnapshot({
-          kind: 'propagate-update',
-          line: 'P2–P4',
-          message: `Atualização: C[${target}] ← ${displayValue(candidate)}. A origem passa a ser v${source}, por inserção no texto. ${outgoing.length} aresta(s) de saída de v${target} entram na fila.`,
-          patternIndex: i,
-          patternChar: p,
-          C,
-          Cnext,
-          activeNode: target,
-          activeEdgeId: edgeId,
-          changedNodes: [target],
-          queue: queue.slice(cursor),
-        }));
+        snapshots.push(
+          makeSnapshot({
+            kind: 'propagate-update',
+            line: 'P2–P4',
+            message: `Atualização: C[${target}] ← ${displayValue(
+              candidate,
+            )}. A origem passa a ser v${source}, por inserção no texto. ${
+              outgoing.length
+            } aresta(s) de saída de v${target} entram na fila.`,
+            patternIndex: i,
+            patternChar: p,
+            C,
+            Cnext,
+            activeNode: target,
+            activeEdgeId: edgeId,
+            changedNodes: [target],
+            queue: queue.slice(cursor),
+          }),
+        );
       } else {
-        snapshots.push(makeSnapshot({
-          kind: 'propagate-nochange',
-          line: 'P1',
-          message: `Nenhuma atualização em v${target}: a condição é falsa.`,
-          patternIndex: i,
-          patternChar: p,
-          C,
-          Cnext,
-          activeEdgeId: edgeId,
-          queue: remaining,
-        }));
+        snapshots.push(
+          makeSnapshot({
+            kind: 'propagate-nochange',
+            line: 'P1',
+            message: 'Nenhuma atualização em v' + target + ': a condição é falsa.',
+            patternIndex: i,
+            patternChar: p,
+            C,
+            Cnext,
+            activeEdgeId: edgeId,
+            queue: remaining,
+          }),
+        );
       }
     }
 
     Cnext = cloneMap(C);
 
-    snapshots.push(makeSnapshot({
-      kind: 'iteration-done',
-      line: 5,
-      message: `Fim da iteração i = ${i + 1}. Os valores C incorporam todas as inserções propagadas.`,
-      patternIndex: i,
-      patternChar: p,
-      C,
-      Cnext,
-    }));
+    snapshots.push(
+      makeSnapshot({
+        kind: 'iteration-done',
+        line: 5,
+        message: `Fim da iteração i = ${
+          i + 1
+        }. Os valores C incorporam todas as inserções propagadas.`,
+        patternIndex: i,
+        patternChar: p,
+        C,
+        Cnext,
+      }),
+    );
   }
 
-  const bestPath = reconstructBestPath(C, cleanPattern.length - 1, back);
+  const paths = reconstructAllPaths(
+    C,
+    cleanPattern.length - 1,
+    back,
+    chars,
+    cleanPattern,
+  );
+  const bestPath = paths[0] || {
+    nodes: [],
+    edgeIds: [],
+    end: null,
+    distance: INF,
+    alignment: null,
+  };
+
   const pathText = bestPath.nodes.length
     ? bestPath.nodes.map((id) => `v${id}`).join(' → ')
     : 'nenhum';
 
-  snapshots.push(makeSnapshot({
-    kind: 'done',
-    line: 'fim',
-    message: `Execução concluída. Caminhada testemunha de menor custo: ${pathText}. Distância final mínima: ${displayValue(bestPath.distance)}.`,
-    patternIndex: cleanPattern.length - 1,
-    patternChar: cleanPattern.at(-1),
-    C,
-    Cnext,
-    bestPath,
-  }));
+  snapshots.push(
+    makeSnapshot({
+      kind: 'done',
+      line: 'fim',
+      message: `Execução concluída. Caminhadas de menor custo reconstruídas. Um exemplo: ${pathText}. Distância final mínima: ${displayValue(
+        bestPath.distance,
+      )}.`,
+      patternIndex: cleanPattern.length - 1,
+      patternChar: cleanPattern.at(-1),
+      C,
+      Cnext,
+      bestPath,
+    }),
+  );
 
-  return { error: null, snapshots };
+  return { error: null, snapshots, paths };
 }
 
 function TextNode({ data, selected }) {
@@ -422,72 +672,90 @@ function TextNode({ data, selected }) {
     data.active ? 'active-node' : '',
     data.changed ? 'changed-node' : '',
     data.onBestPath ? 'best-path-node' : '',
-  ].filter(Boolean).join(' ');
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <div className={className}>
-      <Handle type="target" position={Position.Left} />
-      <Handle type="source" position={Position.Right} />
       <div className="node-id">v{data.label}</div>
-      <div className="node-char">{data.char || '?'}</div>
+      <div className="node-char">{data.char}</div>
       <div className="node-values">
         <span>C: {displayValue(data.C)}</span>
         <span>C′: {displayValue(data.Cnext)}</span>
       </div>
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="source"
+        style={{ background: '#0f766e' }}
+      />
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="target"
+        style={{ background: '#0f766e' }}
+      />
     </div>
   );
 }
 
-const nodeTypes = { textNode: TextNode };
+const nodeTypes = {
+  textNode: TextNode,
+};
 
 function App() {
-  return (
-    <ReactFlowProvider>
-      <Visualizer />
-    </ReactFlowProvider>
-  );
-}
-
-function Visualizer() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+
   const [pattern, setPattern] = useState('bbbb');
   const [snapshots, setSnapshots] = useState([]);
-  const [step, setStep] = useState(0);
-  const [error, setError] = useState('');
-  const [selectedNodeId, setSelectedNodeId] = useState(null);
-  const [isRunning, setIsRunning] = useState(false);
-  const nextId = useRef(6);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [paths, setPaths] = useState([]);
+  const [selectedPathIndex, setSelectedPathIndex] = useState(0);
+  const [error, setError] = useState(null);
 
-  const current = snapshots[step] || null;
+  const [isPlaying, setIsPlaying] = useState(false);
+  const playRef = useRef(null);
 
-  const resetRun = useCallback(() => {
-    setSnapshots([]);
-    setStep(0);
-    setError('');
-    setIsRunning(false);
-  }, []);
+  const current = snapshots[currentIndex] || null;
+  const totalSteps = snapshots.length;
 
-  const decoratedNodes = useMemo(() => {
-    const pathNodes = new Set(current?.bestPath?.nodes || []);
+  const selectedPath =
+    paths.length && selectedPathIndex >= 0 && selectedPathIndex < paths.length
+      ? paths[selectedPathIndex]
+      : null;
 
-    return nodes.map((node) => ({
-      ...node,
-      data: {
-        ...node.data,
-        label: node.id,
-        C: current ? current.C[node.id] : node.data.C,
-        Cnext: current ? current.Cnext[node.id] : node.data.Cnext,
-        active: Boolean(current && current.activeNode === node.id),
-        changed: Boolean(current && current.changedNodes.includes(node.id)),
-        onBestPath: pathNodes.has(node.id),
-      },
-    }));
-  }, [nodes, current]);
+  const decoratedNodes = useMemo(
+    () =>
+      nodes.map((node) => {
+        const onBestPath = selectedPath
+          ? selectedPath.nodes.includes(node.id)
+          : false;
+
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            label: node.id,
+            C: current ? current.C[node.id] ?? node.data.C : node.data.C,
+            Cnext: current
+              ? current.Cnext[node.id] ?? node.data.Cnext
+              : node.data.Cnext,
+            active: current ? current.activeNode === node.id : false,
+            changed: current
+              ? current.changedNodes?.includes(node.id) ?? false
+              : false,
+            onBestPath,
+          },
+        };
+      }),
+    [nodes, current, selectedPath],
+  );
 
   const decoratedEdges = useMemo(() => {
-    const pathEdgeIds = new Set(current?.bestPath?.edgeIds || []);
-    const activeEdgeId = current?.activeEdgeId || null;
+    const pathEdgeIds = new Set(selectedPath?.edgeIds || []);
+    const activeEdgeId = current?.activeEdgeId ?? null;
 
     return edges.map((edge) => {
       const isPathEdge = pathEdgeIds.has(edge.id);
@@ -500,7 +768,6 @@ function Visualizer() {
         color = '#7c3aed';
         strokeWidth = 5;
       }
-
       if (isActiveEdge) {
         color = '#e11d48';
         strokeWidth = 4;
@@ -509,9 +776,11 @@ function Visualizer() {
       return {
         ...edge,
         className: '',
-        selected: false,
         animated: false,
-        markerEnd: { type: MarkerType.ArrowClosed, color },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color,
+        },
         style: {
           stroke: color,
           strokeWidth,
@@ -520,362 +789,477 @@ function Visualizer() {
         },
       };
     });
-  }, [edges, current]);
+  }, [edges, current, selectedPath]);
 
-  const selectedNode = nodes.find((node) => node.id === selectedNodeId) || null;
+  const handleConnect = useCallback(
+    (connection) => {
+      setEdges((eds) =>
+        addEdge(
+          {
+            ...connection,
+            markerEnd: { type: MarkerType.ArrowClosed },
+          },
+          eds,
+        ),
+      );
+    },
+    [setEdges],
+  );
 
-  const onConnect = useCallback((connection) => {
-    setEdges((oldEdges) => addEdge({
-      ...connection,
-      markerEnd: { type: MarkerType.ArrowClosed },
-    }, oldEdges));
-    resetRun();
-  }, [setEdges, resetRun]);
+  const handleAddNode = useCallback(() => {
+    const maxId =
+      nodes.length === 0
+        ? 0
+        : Math.max(...nodes.map((n) => Number(n.id) || 0));
+    const newId = String(maxId + 1);
 
-  const onNodeClick = useCallback((_, node) => {
-    setSelectedNodeId(node.id);
-  }, []);
-
-  const runAlgorithm = useCallback(() => {
-    const result = createRun(nodes, edges, pattern);
-    if (result.error) {
-      setError(result.error);
-      return;
-    }
-    setError('');
-    setSnapshots(result.snapshots);
-    setStep(0);
-    setIsRunning(false);
-  }, [nodes, edges, pattern]);
-
-  const addNode = () => {
-    const id = String(nextId.current);
-    nextId.current += 1;
-
-    setNodes((oldNodes) => [
-      ...oldNodes,
-      {
-        id,
-        type: 'textNode',
-        position: {
-          x: 130 + (oldNodes.length % 4) * 145,
-          y: 100 + Math.floor(oldNodes.length / 4) * 150,
-        },
-        data: { char: 'a', C: 0, Cnext: null },
+    const newNode = {
+      id: newId,
+      type: 'textNode',
+      position: {
+        x: 100 + 40 * nodes.length,
+        y: 200 + 10 * nodes.length,
       },
-    ]);
-    setSelectedNodeId(id);
-    resetRun();
-  };
+      data: { char: 'b', C: 0, Cnext: null },
+    };
 
-  const removeSelectedNode = () => {
-    if (!selectedNodeId) return;
-    setNodes((oldNodes) => oldNodes.filter((node) => node.id !== selectedNodeId));
-    setEdges((oldEdges) => oldEdges.filter(
-      (edge) => edge.source !== selectedNodeId && edge.target !== selectedNodeId,
-    ));
-    setSelectedNodeId(null);
-    resetRun();
-  };
+    setNodes((nds) => [...nds, newNode]);
+  }, [nodes, setNodes]);
 
-  const updateSelectedChar = (value) => {
-    if (!selectedNodeId) return;
-    const char = value.slice(-1);
-    setNodes((oldNodes) => oldNodes.map((node) => (
-      node.id === selectedNodeId
-        ? { ...node, data: { ...node.data, char } }
-        : node
-    )));
-    resetRun();
-  };
-
-  const deleteSelectedEdges = () => {
-    setEdges((oldEdges) => oldEdges.filter((edge) => !edge.selected));
-    resetRun();
-  };
-
-  const loadExample = () => {
+  const handleReset = useCallback(() => {
     setNodes(initialNodes);
     setEdges(initialEdges);
-    setPattern('bbbb');
-    nextId.current = 6;
-    setSelectedNodeId(null);
-    resetRun();
-  };
+    setSnapshots([]);
+    setPaths([]);
+    setSelectedPathIndex(0);
+    setCurrentIndex(0);
+    setError(null);
+    setIsPlaying(false);
+    if (playRef.current) clearInterval(playRef.current);
+  }, []);
 
-  const exportGraph = () => {
-    const payload = JSON.stringify({ nodes, edges, pattern }, null, 2);
-    const blob = new Blob([payload], { type: 'application/json' });
+  const handleRun = useCallback(() => {
+    const { error: runError, snapshots: runSnapshots, paths: runPaths } =
+      createRun(nodes, edges, pattern);
+
+    if (runError) {
+      setError(runError);
+      setSnapshots([]);
+      setPaths([]);
+      setSelectedPathIndex(0);
+      setCurrentIndex(0);
+      return;
+    }
+
+    setError(null);
+    setSnapshots(runSnapshots);
+    setPaths(runPaths);
+    setSelectedPathIndex(0);
+    setCurrentIndex(0);
+  }, [nodes, edges, pattern]);
+
+  const handlePrev = useCallback(() => {
+    setCurrentIndex((idx) => Math.max(0, idx - 1));
+  }, []);
+
+  const handleNext = useCallback(() => {
+    setCurrentIndex((idx) =>
+      totalSteps === 0 ? 0 : Math.min(totalSteps - 1, idx + 1),
+    );
+  }, [totalSteps]);
+
+  const handlePlayStop = useCallback(() => {
+    if (isPlaying) {
+      setIsPlaying(false);
+      if (playRef.current) clearInterval(playRef.current);
+      return;
+    }
+
+    if (!snapshots.length) return;
+
+    setIsPlaying(true);
+    playRef.current = setInterval(() => {
+      setCurrentIndex((idx) => {
+        const next = idx + 1;
+        if (next >= snapshots.length) {
+          // para no final
+          setIsPlaying(false);
+          if (playRef.current) clearInterval(playRef.current);
+          return idx;
+        }
+        return next;
+      });
+    }, 800);
+  }, [isPlaying, snapshots.length]);
+
+  useEffect(() => {
+    return () => {
+      if (playRef.current) clearInterval(playRef.current);
+    };
+  }, []);
+
+  const handlePathSelect = useCallback((event) => {
+    const value = Number(event.target.value);
+    setSelectedPathIndex(Number.isNaN(value) ? 0 : value);
+  }, []);
+
+  const handleNodeCharChange = useCallback(
+    (id, char) => {
+      setNodes((nds) =>
+        nds.map((node) =>
+          node.id === id
+            ? {
+                ...node,
+                data: {
+                  ...node.data,
+                  char: char || '?',
+                },
+              }
+            : node,
+        ),
+      );
+    },
+    [setNodes],
+  );
+
+  const handleExportJSON = useCallback(() => {
+    const data = {
+      nodes: nodes.map((node) => ({
+        id: node.id,
+        type: node.type,
+        position: node.position,
+        data: { char: node.data.char || 'b' },
+      })),
+      edges: edges.map((edge) => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+      })),
+      pattern,
+    };
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: 'application/json',
+    });
+
     const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = 'grafo-navarro.json';
-    anchor.click();
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'grafo-navarro.json';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
     URL.revokeObjectURL(url);
-  };
+  }, [nodes, edges, pattern]);
 
-  const importGraph = (event) => {
+  const handleImportJSON = useCallback((event) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = (e) => {
       try {
-        const data = JSON.parse(String(reader.result));
-        if (!Array.isArray(data.nodes) || !Array.isArray(data.edges)) {
-          throw new Error('Formato inválido');
-        }
-
-        const importedNodes = data.nodes.map((node) => ({
-          ...node,
-          type: 'textNode',
+        const data = JSON.parse(e.target.result);
+        const importedNodes = (data.nodes || []).map((node) => ({
+          id: node.id,
+          type: node.type || 'textNode',
+          position: node.position || { x: 0, y: 0 },
           data: {
-            char: node.data?.char || 'a',
+            char: node.data?.char || 'b',
             C: 0,
             Cnext: null,
           },
         }));
+        const importedEdges = (data.edges || []).map((edge) => ({
+          id: edge.id,
+          source: edge.source,
+          target: edge.target,
+          markerEnd: { type: MarkerType.ArrowClosed },
+        }));
 
         setNodes(importedNodes);
-        setEdges(data.edges.map((edge) => ({
-          ...edge,
-          markerEnd: { type: MarkerType.ArrowClosed },
-        })));
-        setPattern(typeof data.pattern === 'string' ? data.pattern : '');
+        setEdges(importedEdges);
+        if (typeof data.pattern === 'string') {
+          setPattern(data.pattern);
+        }
 
-        const numericIds = importedNodes.map((node) => Number(node.id)).filter(Number.isFinite);
-        nextId.current = numericIds.length ? Math.max(...numericIds) + 1 : importedNodes.length + 1;
-        setSelectedNodeId(null);
-        resetRun();
-      } catch {
-        setError('Não foi possível importar o arquivo JSON.');
+        setSnapshots([]);
+        setPaths([]);
+        setSelectedPathIndex(0);
+        setCurrentIndex(0);
+        setError(null);
+      } catch (err) {
+        setError('Falha ao importar JSON: ' + String(err));
       }
     };
-
     reader.readAsText(file);
-    event.target.value = '';
-  };
+  }, [setNodes, setEdges]);
 
-  useEffect(() => {
-    if (!isRunning || !snapshots.length) return undefined;
-
-    const timer = window.setInterval(() => {
-      setStep((oldStep) => {
-        if (oldStep >= snapshots.length - 1) {
-          setIsRunning(false);
-          return oldStep;
-        }
-        return oldStep + 1;
-      });
-    }, 650);
-
-    return () => window.clearInterval(timer);
-  }, [isRunning, snapshots.length]);
-
-  const pseudocode = [
-    ['1', 'para todo v ∈ V: C[v] ← 0'],
-    ['2', 'para i = 1 até m'],
-    ['3', 'para todo v ∈ V: C′[v] ← g(v, i)'],
-    ['4', 'para todo v ∈ V: C[v] ← C′[v]'],
-    ['5', 'para toda aresta (u, v) ∈ E: Propagate(u, v)'],
-    ['P1', 'se C[v] > 1 + C[u]'],
-    ['P2–P4', 'C[v] ← 1 + C[u]; propagar pelas saídas de v'],
-  ];
+  const currentLine = current?.line ?? '';
+  const currentMessage = current?.message ?? '';
+  const currentPatternIndex = current?.patternIndex ?? -1;
+  const currentPatternChar = current?.patternChar ?? '';
 
   return (
     <div className="app-shell">
       <header className="topbar">
         <div>
-          <h1>Visualizador do Algoritmo de Navarro</h1>
-          <p>Casamento aproximado de padrão em grafo de texto, com propagação de inserções.</p>
+          <h1>Visualizador do algoritmo de Navarro</h1>
+          <p>
+            Execução passo a passo do casamento aproximado de padrão em grafos
+            direcionados.
+          </p>
         </div>
-        <div className="header-badge">React Flow + JavaScript</div>
+        <div className="header-badge">
+          Distância de edição em grafos com propagação de inserções.
+        </div>
       </header>
 
-      <main className="layout">
+      <div className="layout">
         <aside className="sidebar controls-panel">
-          <h2>1. Monte o grafo</h2>
+          <h2>Configuração</h2>
           <p className="help-text">
-            Arraste os vértices. Para criar uma aresta, arraste da alça direita de um nó até a alça esquerda de outro.
+            Edite o padrão abaixo e os caracteres em cada vértice. Crie nós e
+            arestas para montar o grafo em que o padrão será buscado.
           </p>
 
-          <div className="button-grid">
-            <button onClick={addNode}>+ Vértice</button>
-            <button onClick={removeSelectedNode} disabled={!selectedNodeId}>Remover vértice</button>
-            <button onClick={deleteSelectedEdges}>Remover arestas selecionadas</button>
-            <button onClick={loadExample}>Carregar exemplo</button>
-          </div>
-
-          <label className="field-label" htmlFor="pattern">Padrão</label>
+          abel className="field-label" htmlFor="pattern">
+            Padrão (patt)
+          </label>
           <input
             id="pattern"
             value={pattern}
-            onChange={(event) => {
-              setPattern(event.target.value);
-              resetRun();
-            }}
-            placeholder="Ex.: bbbb"
-            spellCheck="false"
+            onChange={(e) => setPattern(e.target.value)}
           />
 
-          <h3>Vértice selecionado</h3>
-          {selectedNode ? (
-            <>
-              <div className="selection-card">v{selectedNode.id}</div>
-              <label className="field-label" htmlFor="vertex-char">Caractere do vértice</label>
-              <input
-                id="vertex-char"
-                value={selectedNode.data.char || ''}
-                maxLength={1}
-                onChange={(event) => updateSelectedChar(event.target.value)}
-                placeholder="a"
-              />
-            </>
-          ) : (
-            <p className="muted">Clique em um vértice para trocar sua letra.</p>
-          )}
-
-          <div className="file-actions">
-            <button onClick={exportGraph}>Exportar JSON</button>
-            <label className="import-label">
+          <div className="button-grid">
+            <button type="button" onClick={handleAddNode}>
+              Adicionar vértice
+            </button>
+            abel className="import-label">
               Importar JSON
-              <input type="file" accept="application/json" onChange={importGraph} />
+              <input
+                type="file"
+                accept="application/json"
+                onChange={handleImportJSON}
+              />
             </label>
           </div>
-        </aside>
-
-        <section className="canvas-panel">
-          <ReactFlow
-            nodes={decoratedNodes}
-            edges={decoratedEdges}
-            nodeTypes={nodeTypes}
-            onNodesChange={(changes) => {
-              onNodesChange(changes);
-              resetRun();
-            }}
-            onEdgesChange={(changes) => {
-              onEdgesChange(changes);
-              resetRun();
-            }}
-            onConnect={onConnect}
-            onNodeClick={onNodeClick}
-            fitView
-            minZoom={0.3}
-            defaultEdgeOptions={{ markerEnd: { type: MarkerType.ArrowClosed } }}
-          >
-            <Background gap={20} size={1} />
-            <Controls />
-            <MiniMap nodeColor="#155e75" />
-          </ReactFlow>
-
-          <div className="canvas-caption">
-            Cada vértice armazena um único caractere. O visualizador executa a versão de Navarro para grafos cíclicos e acíclicos.
-          </div>
-        </section>
-
-        <aside className="sidebar execution-panel">
-          <h2>2. Execute passo a passo</h2>
 
           <div className="execution-buttons">
-            <button className="primary" onClick={runAlgorithm}>Gerar execução</button>
             <button
-              onClick={() => setStep((value) => Math.max(0, value - 1))}
-              disabled={!snapshots.length || step === 0}
+              type="button"
+              className="primary"
+              onClick={handleRun}
+              disabled={!nodes.length}
             >
-              ← Anterior
+              Gerar execução
             </button>
-            <button
-              onClick={() => setStep((value) => Math.min(snapshots.length - 1, value + 1))}
-              disabled={!snapshots.length || step >= snapshots.length - 1}
-            >
-              Próximo →
+            <button type="button" onClick={handleReset}>
+              Reiniciar
             </button>
-            <button
-              onClick={() => setIsRunning((value) => !value)}
-              disabled={!snapshots.length || step >= snapshots.length - 1}
-            >
-              {isRunning ? 'Pausar' : 'Animar'}
+            <button type="button" onClick={handleExportJSON}>
+              Exportar JSON
             </button>
-            <button onClick={resetRun}>Limpar execução</button>
           </div>
 
-          {error && <div className="error-box">{error}</div>}
-
+          <h3>Controle de animação</h3>
           <div className="progress">
-            <span>Passo {snapshots.length ? step + 1 : 0} de {snapshots.length}</span>
+            <span>
+              Passo {totalSteps === 0 ? 0 : currentIndex + 1} de {totalSteps}.
+            </span>
             <input
               type="range"
-              min="0"
-              max={Math.max(0, snapshots.length - 1)}
-              value={snapshots.length ? step : 0}
-              disabled={!snapshots.length}
-              onChange={(event) => setStep(Number(event.target.value))}
+              min={0}
+              max={Math.max(0, totalSteps - 1)}
+              value={currentIndex}
+              onChange={(e) => setCurrentIndex(Number(e.target.value))}
             />
           </div>
 
-          <div className="status-card">
-            <div className="status-meta">
-              <span>linha: <strong>{current?.line ?? '—'}</strong></span>
-              <span>i: <strong>{current ? current.patternIndex + 1 : '—'}</strong></span>
-              <span>patt[i]: <strong>{current?.patternChar || '—'}</strong></span>
-            </div>
-            <p>{current?.message || 'Clique em “Gerar execução” para calcular os estados.'}</p>
+          <div className="execution-buttons">
+            <button type="button" onClick={handlePrev} disabled={!snapshots.length}>
+              Passo anterior
+            </button>
+            <button type="button" onClick={handleNext} disabled={!snapshots.length}>
+              Próximo passo
+            </button>
+            <button
+              type="button"
+              className="primary"
+              onClick={handlePlayStop}
+              disabled={!snapshots.length}
+            >
+              {isPlaying ? 'Parar animação' : 'Reproduzir animação'}
+            </button>
           </div>
 
-          {current?.bestPath?.nodes?.length > 0 && (
+          <div className="file-actions">
+            <span className="muted">
+              Para importar um grafo grande, use o formato JSON exportado e
+              escolha o arquivo.
+            </span>
+          </div>
+        </aside>
+
+        <main className="canvas-panel">
+          <ReactFlowProvider>
+            <ReactFlow
+              nodes={decoratedNodes}
+              edges={decoratedEdges}
+              nodeTypes={nodeTypes}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onConnect={handleConnect}
+              fitView
+            >
+              <MiniMap />
+              <Controls />
+              <Background gap={18} size={1} />
+            </ReactFlow>
+          </ReactFlowProvider>
+
+          <div className="canvas-caption">
+            Edite o grafo com o mouse: arraste vértices, crie arestas ligando o
+            handle de saída ao handle de entrada, altere o caractere de cada
+            vértice clicando e editando no inspetor lateral.
+          </div>
+        </main>
+
+        <aside className="sidebar status-panel">
+          <h2>Estado da execução</h2>
+
+          <div className="status-card">
+            <strong>Linha ativa do pseudocódigo</strong>
+            <p>
+              {typeof currentLine === 'string'
+                ? `Linha ${currentLine}`
+                : `Linha ${String(currentLine)}`}
+            </p>
+            <p>{currentMessage}</p>
+
+            <div className="status-meta">
+              <span>
+                i ={' '}
+                {currentPatternIndex < 0
+                  ? '—'
+                  : String(currentPatternIndex + 1)}
+              </span>
+              <span>
+                patt[i] ={' '}
+                {currentPatternChar ? `“${currentPatternChar}”` : '—'}
+              </span>
+            </div>
+          </div>
+
+          {selectedPath && (
             <div className="best-path-box">
-              <strong>Caminho destacado</strong>
-              <div>{current.bestPath.nodes.map((id) => `v${id}`).join(' → ')}</div>
-              <div>Distância de edição: {displayValue(current.bestPath.distance)}</div>
+              <strong>Caminhos de menor distância</strong>
+              <div className="best-path-select">
+                abel htmlFor="pathSelect">Escolha o caminho:</label>
+                <select
+                  id="pathSelect"
+                  value={selectedPathIndex}
+                  onChange={handlePathSelect}
+                >
+                  {paths.map((path, idx) => (
+                    <option key={idx} value={idx}>
+                      #{idx + 1}:{' '}
+                      {path.nodes.map((id) => `v${id}`).join(' → ')}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                Distância de edição desse caminho:{' '}
+                {displayValue(selectedPath.distance)}
+              </div>
             </div>
           )}
 
-          <h3>Pseudocódigo</h3>
-          <ol className="pseudocode">
-            {pseudocode.map(([line, text]) => (
-              <li key={line} className={String(current?.line) === line ? 'active-line' : ''}>
-                <span className="line-no">{line}</span>
-                <span>{text}</span>
-              </li>
-            ))}
-          </ol>
-
-          <h3>Fila de propagação</h3>
-          <div className="queue-box">
-            {current?.queue?.length ? (
-              current.queue.slice(0, 12).map((edge, index) => (
-                <span className="queue-item" key={`${edge.edgeId}-${index}`}>
-                  {edge.source}→{edge.target}
+          {selectedPath?.alignment && (
+            <div className="alignment-box">
+              <strong>Comparação padrão ↔ caminho selecionado</strong>
+              <div className="alignment-line">
+                <span className="alignment-label">Padrão</span>
+                <span className="alignment-seq">
+                  {selectedPath.alignment.steps.map((step, idx) => (
+                    <span
+                      key={`p-${idx}`}
+                      className={`align-op align-op-${step.op}`}
+                    >
+                      {step.patternChar === '—'
+                        ? '∅'
+                        : step.patternChar}
+                    </span>
+                  ))}
                 </span>
-              ))
-            ) : (
-              <span className="muted">Vazia</span>
-            )}
-          </div>
+              </div>
+              <div className="alignment-line">
+                <span className="alignment-label">Texto</span>
+                <span className="alignment-seq">
+                  {selectedPath.alignment.steps.map((step, idx) => (
+                    <span
+                      key={`t-${idx}`}
+                      className={`align-op align-op-${step.op}`}
+                    >
+                      {step.textChar === '—' ? '∅' : step.textChar}
+                    </span>
+                  ))}
+                </span>
+              </div>
+              <div className="alignment-line">
+                <span className="alignment-label">Operações</span>
+                <span className="alignment-seq">
+                  {selectedPath.alignment.steps.map((step, idx) => (
+                    <span
+                      key={`o-${idx}`}
+                      className={`align-op align-op-${step.op}`}
+                    >
+                      {step.op}
+                    </span>
+                  ))}
+                </span>
+              </div>
+            </div>
+          )}
 
-          <h3>Valores atuais</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>v</th>
-                <th>t[v]</th>
-                <th>C[v]</th>
-                <th>C′[v]</th>
-              </tr>
-            </thead>
-            <tbody>
-              {nodes.map((node) => (
-                <tr key={node.id} className={current?.changedNodes.includes(node.id) ? 'changed-row' : ''}>
-                  <td>{node.id}</td>
-                  <td>{node.data.char || '?'}</td>
-                  <td>{displayValue(current?.C[node.id] ?? node.data.C)}</td>
-                  <td>{displayValue(current?.Cnext[node.id] ?? node.data.Cnext)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {error && <div className="error-box">{error}</div>}
+
+          <h3>Pseudocódigo</h3>
+          <ul className="pseudocode">
+            >
+              <span>1</span>
+              <span>Inicializar C[v] ← 0 para todo v ∈ V.</span>
+            </li>
+            >
+              <span>2</span>
+              <span>
+                Para i = 1..m, processar patt[i] e calcular C′[v] para todo
+                v.
+              </span>
+            </li>
+            >
+              <span>3</span>
+              <span>
+                Calcular C′[v] considerando casamento, substituição,
+                deleção no padrão.
+              </span>
+            </li>
+            >
+              <span>4</span>
+              <span>C[v] ← C′[v] para todo v.</span>
+            </li>
+            >
+              <span>5</span>
+              <span>
+                Propagar inserções no texto: enquanto houver aresta (u, v)
+                com C[v] &gt; 1 + C[u], atualizar C[v].
+              </span>
+            </li>
+          </ul>
         </aside>
-      </main>
+      </div>
     </div>
   );
 }

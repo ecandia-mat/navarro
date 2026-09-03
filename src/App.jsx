@@ -686,34 +686,6 @@ const nodeTypes = {
 };
 
 function App() {
-  const [selectedNodeId, setSelectedNodeId] = useState(null);
-
-  const updateSelectedChar = useCallback(
-    (value) => {
-      if (!selectedNodeId) return;
-
-      // pega só o último caractere digitado
-      const char = value.slice(-1);
-
-      setNodes((oldNodes) =>
-        oldNodes.map((node) =>
-          node.id === selectedNodeId
-            ? {
-                ...node,
-                data: {
-                  ...node.data,
-                  char: char || node.data.char,
-                },
-              }
-            : node,
-        ),
-      );
-    },
-    [selectedNodeId, setNodes],
-  );
-  const handleNodeClick = useCallback((_, node) => {
-    setSelectedNodeId(node.id);
-  }, []);
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
@@ -1068,36 +1040,6 @@ function App() {
             </button>
           </div>
 
-          <h3>Vértice selecionado</h3>
-
-            {selectedNodeId ? (
-              <div className="selection-card">
-                <div>v{selectedNodeId}</div>
-
-                <label className="field-label" htmlFor="vertex-char">
-                  Caractere do vértice
-                </label>
-                <input
-                  id="vertex-char"
-                  type="text"
-                  maxLength={1}
-                  value={
-                    nodes.find((node) => node.id === selectedNodeId)?.data.char || ''
-                  }
-                  onChange={(event) => updateSelectedChar(event.target.value)}
-                  placeholder="a"
-                />
-
-                <p className="muted">
-                  Clique em um vértice no grafo para trocar sua letra.
-                </p>
-              </div>
-            ) : (
-              <p className="muted">
-                Clique em um vértice no grafo para editar o caractere.
-              </p>
-            )}
-
           <h3>Controle de animação</h3>
           <div className="progress">
             <span>
@@ -1154,7 +1096,6 @@ function App() {
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={handleConnect}
-              onNodeClick={handleNodeClick}   // <<< adiciona isto
               fitView
             >
               <MiniMap />

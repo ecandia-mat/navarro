@@ -204,7 +204,7 @@ function createRun(nodes, edges, pattern) {
       if (chars[id] === p) {
         const startCost = i;
 
-        if (bestIncoming.cost < startCost) {
+        if (bestIncoming.cost <= startCost) {
           Cnext[id] = bestIncoming.cost;
           choices[id] = {
             kind: 'match',

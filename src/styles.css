@@ -548,31 +548,3 @@ tr:last-child td {
   background: #e0f2fe;
   color: #1d4ed8;
 }
-
-.selection-card {
-  margin-top: 10px;
-  border: 1px solid #e5e7eb;
-  border-radius: 9px;
-  padding: 8px 10px;
-  font-size: 0.83rem;
-  background: #f9fafb;
-}
-
-.selection-card > div:first-child {
-  font-weight: 600;
-  margin-bottom: 4px;
-}
-
-.field-label {
-  display: block;
-  margin-top: 6px;
-  font-size: 0.74rem;
-  font-weight: 600;
-  color: #4b5563;
-}
-
-.muted {
-  margin-top: 6px;
-  font-size: 0.74rem;
-  color: #6b7280;
-}

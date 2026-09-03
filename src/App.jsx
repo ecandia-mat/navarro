@@ -99,7 +99,6 @@ function cloneMap(map) {
 function copyPath(path) {
   return {
     nodes: [...(path?.nodes || [])],
-    edgeIds: [...(path?.edgeIds || [])],
     end: path?.end ?? null,
     distance: path?.distance ?? INF,
     alignment: path?.alignment
@@ -121,7 +120,7 @@ function makeSnapshot({
   patternChar,
   C,
   Cnext,
-  bestPath = { nodes: [], edgeIds: [], end: null, distance: INF },
+  bestPath = { nodes: [], end: null, distance: INF },
   activeNode = null,
   activeEdgeId = null,
   changedNodes = [],
@@ -156,14 +155,12 @@ function stateKey(patternIndex, nodeId) {
 }
 
 /**
- * Reconstrói uma única caminhada + alinhamento completo
- * para um vértice terminal end, usando o mapa de ponteiros.
+ * Reconstrói uma caminhada + alinhamento completo (padrão ↔ texto) para um vértice final.
  */
 function reconstructOnePath(end, finalIndex, back, chars, pattern, C) {
   if (C[end] >= INF) {
     return {
       nodes: [],
-      edgeIds: [],
       end,
       distance: C[end],
       alignment: null,
@@ -171,7 +168,6 @@ function reconstructOnePath(end, finalIndex, back, chars, pattern, C) {
   }
 
   const reversedNodes = [];
-  const reversedEdgeIds = [];
   const reversedSteps = [];
   const visitedStates = new Set();
 
@@ -208,7 +204,6 @@ function reconstructOnePath(end, finalIndex, back, chars, pattern, C) {
         op: '=',
       });
       reversedNodes.push(v);
-      if (pointer.edgeId) reversedEdgeIds.push(pointer.edgeId);
       i = pointer.prevIndex;
       v = pointer.prevNode;
       continue;
@@ -221,7 +216,6 @@ function reconstructOnePath(end, finalIndex, back, chars, pattern, C) {
         op: 'X',
       });
       reversedNodes.push(v);
-      if (pointer.edgeId) reversedEdgeIds.push(pointer.edgeId);
       i = pointer.prevIndex;
       v = pointer.prevNode;
       continue;
@@ -245,7 +239,6 @@ function reconstructOnePath(end, finalIndex, back, chars, pattern, C) {
         op: 'I',
       });
       reversedNodes.push(v);
-      if (pointer.edgeId) reversedEdgeIds.push(pointer.edgeId);
       i = pointer.prevIndex;
       v = pointer.prevNode;
       continue;
@@ -254,6 +247,7 @@ function reconstructOnePath(end, finalIndex, back, chars, pattern, C) {
     break;
   }
 
+  // Se ainda restarem caracteres no padrão, são deleções iniciais.
   for (let k = i; k >= 0; k -= 1) {
     reversedSteps.push({
       patternChar: pattern[k],
@@ -263,7 +257,6 @@ function reconstructOnePath(end, finalIndex, back, chars, pattern, C) {
   }
 
   const nodes = reversedNodes.reverse();
-  const edgeIds = reversedEdgeIds.reverse();
   const steps = reversedSteps.reverse();
 
   const patternSeq = steps.map((s) => s.patternChar).join('');
@@ -272,7 +265,6 @@ function reconstructOnePath(end, finalIndex, back, chars, pattern, C) {
 
   return {
     nodes,
-    edgeIds,
     end,
     distance: C[end],
     alignment: {
@@ -285,7 +277,7 @@ function reconstructOnePath(end, finalIndex, back, chars, pattern, C) {
 }
 
 /**
- * Todos os caminhos de menor custo, com alinhamento completo.
+ * Todos os caminhos de menor custo (sem duplicar), com alinhamento completo.
  */
 function reconstructAllPaths(C, finalIndex, back, chars, pattern) {
   const candidates = Object.entries(C).filter(([, value]) => value < INF);
@@ -305,7 +297,7 @@ function reconstructAllPaths(C, finalIndex, back, chars, pattern) {
     const path = reconstructOnePath(end, finalIndex, back, chars, pattern, C);
     if (!path.nodes.length) continue;
 
-    const key = `${path.nodes.join(',')}|${path.edgeIds.join(',')}`;
+    const key = path.nodes.join(',');
     if (seenKeys.has(key)) continue;
 
     seenKeys.add(key);
@@ -316,7 +308,7 @@ function reconstructAllPaths(C, finalIndex, back, chars, pattern) {
 }
 
 /**
- * Algoritmo de Navarro + reconstrução de todos os caminhos mínimos.
+ * Algoritmo de Navarro + reconstrução dos caminhos mínimos.
  */
 function createRun(nodes, edges, pattern) {
   const cleanPattern = pattern.trim();
@@ -340,6 +332,7 @@ function createRun(nodes, edges, pattern) {
 
   const back = new Map();
 
+  // estado inicial: i = -1
   for (const id of ids) {
     back.set(stateKey(-1, id), {
       kind: 'start',
@@ -394,6 +387,8 @@ function createRun(nodes, edges, pattern) {
       if (chars[id] === p) {
         const startCost = i;
 
+        // Mantemos <= para evitar o caminho impossível; em empates,
+        // o predecessor vira origem do sufixo.
         if (bestIncoming.cost <= startCost && bestIncoming.edge) {
           Cnext[id] = bestIncoming.cost;
           choices[id] = {
@@ -626,13 +621,8 @@ function createRun(nodes, edges, pattern) {
     chars,
     cleanPattern,
   );
-  const bestPath = paths[0] || {
-    nodes: [],
-    edgeIds: [],
-    end: null,
-    distance: INF,
-    alignment: null,
-  };
+  const bestPath =
+    paths[0] || { nodes: [], end: null, distance: INF, alignment: null };
 
   const pathText = bestPath.nodes.length
     ? bestPath.nodes.map((id) => `v${id}`).join(' → ')
@@ -709,15 +699,11 @@ function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const playRef = useRef(null);
 
-  const [selectedNodeId, setSelectedNodeId] = useState(null);
-
   const current = snapshots[currentIndex] || null;
   const totalSteps = snapshots.length;
 
   const selectedPath =
-    paths.length &&
-    selectedPathIndex >= 0 &&
-    selectedPathIndex < paths.length
+    paths.length && selectedPathIndex >= 0 && selectedPathIndex < paths.length
       ? paths[selectedPathIndex]
       : null;
 
@@ -749,7 +735,20 @@ function App() {
   );
 
   const decoratedEdges = useMemo(() => {
-    const pathEdgeIds = new Set(selectedPath?.edgeIds || []);
+    const pathEdgeIds = new Set();
+
+    if (selectedPath && selectedPath.nodes.length > 1) {
+      for (let i = 0; i < selectedPath.nodes.length - 1; i += 1) {
+        const u = selectedPath.nodes[i];
+        const v = selectedPath.nodes[i + 1];
+
+        const edge = edges.find(
+          (e) => e.source === u && e.target === v,
+        );
+        if (edge) pathEdgeIds.add(edge.id);
+      }
+    }
+
     const activeEdgeId = current?.activeEdgeId ?? null;
 
     return edges.map((edge) => {
@@ -770,6 +769,7 @@ function App() {
 
       return {
         ...edge,
+        className: '',
         animated: false,
         markerEnd: {
           type: MarkerType.ArrowClosed,
@@ -800,32 +800,6 @@ function App() {
     [setEdges],
   );
 
-  const handleNodeClick = useCallback((_, node) => {
-    setSelectedNodeId(node.id);
-  }, []);
-
-  const updateSelectedChar = useCallback(
-    (value) => {
-      if (!selectedNodeId) return;
-      const char = value.slice(-1); // último caractere digitado
-
-      setNodes((oldNodes) =>
-        oldNodes.map((node) =>
-          node.id === selectedNodeId
-            ? {
-                ...node,
-                data: {
-                  ...node.data,
-                  char: char || node.data.char,
-                },
-              }
-            : node,
-        ),
-      );
-    },
-    [selectedNodeId, setNodes],
-  );
-
   const handleAddNode = useCallback(() => {
     const maxId =
       nodes.length === 0
@@ -853,7 +827,6 @@ function App() {
     setPaths([]);
     setSelectedPathIndex(-1);
     setCurrentIndex(0);
-    setSelectedNodeId(null);
     setError(null);
     setIsPlaying(false);
     if (playRef.current) clearInterval(playRef.current);
@@ -883,11 +856,14 @@ function App() {
     setCurrentIndex((idx) => Math.max(0, idx - 1));
   }, []);
 
-  const handleNext = useCallback(() => {
-    setCurrentIndex((idx) =>
-      totalSteps === 0 ? 0 : Math.min(totalSteps - 1, idx + 1),
-    );
-  }, [totalSteps]);
+  const handleNext = useCallback(
+    () => {
+      setCurrentIndex((idx) =>
+        totalSteps === 0 ? 0 : Math.min(totalSteps - 1, idx + 1),
+      );
+    },
+    [totalSteps],
+  );
 
   const handlePlayStop = useCallback(() => {
     if (isPlaying) {
@@ -920,7 +896,7 @@ function App() {
 
   const handlePathSelect = useCallback((event) => {
     const value = Number(event.target.value);
-    setSelectedPathIndex(Number.isNaN(value) ? -1 : value);
+    setSelectedPathIndex(Number.isNaN(value) ? 0 : value);
   }, []);
 
   const handleExportJSON = useCallback(() => {
@@ -953,61 +929,53 @@ function App() {
     URL.revokeObjectURL(url);
   }, [nodes, edges, pattern]);
 
-  const handleImportJSON = useCallback(
-    (event) => {
-      const file = event.target.files?.[0];
-      if (!file) return;
+  const handleImportJSON = useCallback((event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
 
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const data = JSON.parse(e.target.result);
-          const importedNodes = (data.nodes || []).map((node) => ({
-            id: node.id,
-            type: node.type || 'textNode',
-            position: node.position || { x: 0, y: 0 },
-            data: {
-              char: node.data?.char || 'b',
-              C: 0,
-              Cnext: null,
-            },
-          }));
-          const importedEdges = (data.edges || []).map((edge) => ({
-            id: edge.id,
-            source: edge.source,
-            target: edge.target,
-            markerEnd: { type: MarkerType.ArrowClosed },
-          }));
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        const importedNodes = (data.nodes || []).map((node) => ({
+          id: node.id,
+          type: node.type || 'textNode',
+          position: node.position || { x: 0, y: 0 },
+          data: {
+            char: node.data?.char || 'b',
+            C: 0,
+            Cnext: null,
+          },
+        }));
+        const importedEdges = (data.edges || []).map((edge) => ({
+          id: edge.id,
+          source: edge.source,
+          target: edge.target,
+          markerEnd: { type: MarkerType.ArrowClosed },
+        }));
 
-          setNodes(importedNodes);
-          setEdges(importedEdges);
-          if (typeof data.pattern === 'string') {
-            setPattern(data.pattern);
-          }
-
-          setSnapshots([]);
-          setPaths([]);
-          setSelectedPathIndex(-1);
-          setCurrentIndex(0);
-          setSelectedNodeId(null);
-          setError(null);
-        } catch (err) {
-          setError('Falha ao importar JSON: ' + String(err));
+        setNodes(importedNodes);
+        setEdges(importedEdges);
+        if (typeof data.pattern === 'string') {
+          setPattern(data.pattern);
         }
-      };
-      reader.readAsText(file);
-    },
-    [setNodes, setEdges],
-  );
+
+        setSnapshots([]);
+        setPaths([]);
+        setSelectedPathIndex(0);
+        setCurrentIndex(0);
+        setError(null);
+      } catch (err) {
+        setError('Falha ao importar JSON: ' + String(err));
+      }
+    };
+    reader.readAsText(file);
+  }, [setNodes, setEdges]);
 
   const currentLine = current?.line ?? '';
   const currentMessage = current?.message ?? '';
   const currentPatternIndex = current?.patternIndex ?? -1;
   const currentPatternChar = current?.patternChar ?? '';
-
-  const selectedNode = selectedNodeId
-    ? nodes.find((node) => node.id === selectedNodeId) || null
-    : null;
 
   return (
     <div className="app-shell">
@@ -1072,33 +1040,6 @@ function App() {
             </button>
           </div>
 
-          <h3>Vértice selecionado</h3>
-          {selectedNode ? (
-            <div className="selection-card">
-              <div>v{selectedNodeId}</div>
-
-              <label className="field-label" htmlFor="vertex-char">
-                Caractere do vértice
-              </label>
-              <input
-                id="vertex-char"
-                type="text"
-                maxLength={1}
-                value={selectedNode.data.char || ''}
-                onChange={(event) => updateSelectedChar(event.target.value)}
-                placeholder="a"
-              />
-
-              <p className="muted">
-                Clique em um vértice no grafo para trocar sua letra.
-              </p>
-            </div>
-          ) : (
-            <p className="muted">
-              Clique em um vértice no grafo para editar o caractere.
-            </p>
-          )}
-
           <h3>Controle de animação</h3>
           <div className="progress">
             <span>
@@ -1155,7 +1096,6 @@ function App() {
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={handleConnect}
-              onNodeClick={handleNodeClick}
               fitView
             >
               <MiniMap />
@@ -1196,6 +1136,8 @@ function App() {
               </span>
             </div>
           </div>
+
+          
 
           {paths.length > 0 && (
             <div className="best-path-box">
@@ -1279,33 +1221,86 @@ function App() {
           <ul className="pseudocode">
             <li className={currentLine === 1 ? 'active-line' : ''}>
               <span>1</span>
-              <span>Inicializar C[v] ← 0 para todo v ∈ V.</span>
+              <span>para todo v ∈ V: C[v] ← 0</span>
             </li>
             <li className={currentLine === 2 ? 'active-line' : ''}>
               <span>2</span>
-              <span>
-                Para i = 1..m, processar patt[i] e calcular C′[v] para todo v.
-              </span>
+              <span>para i = 1 até m</span>
             </li>
             <li className={currentLine === 3 ? 'active-line' : ''}>
               <span>3</span>
-              <span>
-                Calcular C′[v] considerando casamento, substituição, deleção no
-                padrão.
-              </span>
+              <span>para todo v ∈ V: C′[v] ← g(v, i)</span>
             </li>
             <li className={currentLine === 4 ? 'active-line' : ''}>
               <span>4</span>
-              <span>C[v] ← C′[v] para todo v.</span>
+              <span>para todo v ∈ V: C[v] ← C′[v]</span>
             </li>
             <li className={currentLine === 5 ? 'active-line' : ''}>
               <span>5</span>
-              <span>
-                Propagar inserções no texto: enquanto houver aresta (u, v) com
-                C[v] &gt; 1 + C[u], atualizar C[v].
-              </span>
+              <span>para toda aresta (u, v) ∈ E: Propagate(u, v)</span>
+            </li>
+            <li className={currentLine === 'P1' ? 'active-line' : ''}>
+              <span>P1</span>
+              <span>se C[v] &gt; 1 + C[u]</span>
+            </li>
+            <li
+              className={currentLine === 'P2–P4' ? 'active-line' : ''}
+            >
+              <span>P2–P4</span>
+              <span>C[v] ← 1 + C[u]; propagar pelas saídas de v</span>
             </li>
           </ul>
+
+          <h3>Fila de propagação</h3>
+          <div className="queue-box">
+            {current?.queue && current.queue.length ? (
+              current.queue.map((edge, idx) => (
+                <span key={idx} className="queue-item">
+                  {edge.source}→{edge.target}
+                </span>
+              ))
+            ) : (
+              <span className="muted">Fila vazia.</span>
+            )}
+          </div>
+
+          <h3>Valores atuais</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>v</th>
+                <th>t[v]</th>
+                <th>C[v]</th>
+                <th>C′[v]</th>
+              </tr>
+            </thead>
+            <tbody>
+              {nodes.map((node) => {
+                const id = node.id;
+                const char = node.data.char || '?';
+                const Cv = current
+                  ? current.C[id] ?? node.data.C
+                  : node.data.C;
+                const Cnextv = current
+                  ? current.Cnext[id] ?? node.data.Cnext
+                  : node.data.Cnext;
+                const changedRow =
+                  current?.changedNodes?.includes(id) ?? false;
+
+                return (
+                  <tr
+                    key={id}
+                    className={changedRow ? 'changed-row' : ''}
+                  >
+                    <td>{id}</td>
+                    <td>{char}</td>
+                    <td>{displayValue(Cv)}</td>
+                    <td>{displayValue(Cnextv)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </aside>
       </div>
     </div>

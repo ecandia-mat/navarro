@@ -927,6 +927,36 @@ function App() {
     setSelectedAlignmentIndex(null);
   }, [nodes, setNodes]);
 
+  const removeSelectedNode = useCallback(() => {
+    if (!selectedNodeId) return;
+    setNodes((oldNodes) => oldNodes.filter((node) => node.id !== selectedNodeId));
+    setEdges((oldEdges) => oldEdges.filter(
+      (edge) => edge.source !== selectedNodeId && edge.target !== selectedNodeId,
+    ));
+    setSelectedNodeId(null);
+    setSnapshots([]);
+    setPaths([]);
+    setSelectedPathIndex(-1);
+    setSelectedAlignmentIndex(null);
+    setCurrentIndex(0);
+    setError(null);
+  }, [selectedNodeId, setNodes, setEdges]);
+
+  const loadExample = useCallback(() => {
+    setNodes(initialNodes);
+    setEdges(initialEdges);
+    setPattern('bbbb');
+    setSelectedNodeId(null);
+    setSnapshots([]);
+    setPaths([]);
+    setSelectedPathIndex(-1);
+    setSelectedAlignmentIndex(null);
+    setCurrentIndex(0);
+    setError(null);
+    setIsPlaying(false);
+    if (playRef.current) clearInterval(playRef.current);
+  }, [setNodes, setEdges]);
+
   const handleReset = useCallback(() => {
     setNodes(initialNodes);
     setEdges(initialEdges);
@@ -1178,6 +1208,12 @@ function App() {
           <div className="button-grid">
             <button type="button" onClick={handleAddNode}>
               Adicionar vértice
+            </button>
+            <button type="button" onClick={removeSelectedNode} disabled={!selectedNodeId}>
+              Remover vértice
+            </button>
+            <button type="button" onClick={loadExample}>
+              Carregar exemplo
             </button>
             <label className="import-label">
               Importar JSON

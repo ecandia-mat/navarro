@@ -16,36 +16,11 @@ import {
 const INF = 1_000_000;
 
 const initialNodes = [
-  {
-    id: '1',
-    type: 'textNode',
-    position: { x: 70, y: 240 },
-    data: { char: 'b', C: 0, Cnext: null },
-  },
-  {
-    id: '2',
-    type: 'textNode',
-    position: { x: 290, y: 240 },
-    data: { char: 'a', C: 0, Cnext: null },
-  },
-  {
-    id: '3',
-    type: 'textNode',
-    position: { x: 470, y: 100 },
-    data: { char: 'b', C: 0, Cnext: null },
-  },
-  {
-    id: '4',
-    type: 'textNode',
-    position: { x: 260, y: 100 },
-    data: { char: 'b', C: 0, Cnext: null },
-  },
-  {
-    id: '5',
-    type: 'textNode',
-    position: { x: 500, y: 320 },
-    data: { char: 'b', C: 0, Cnext: null },
-  },
+  { id: '1', type: 'textNode', position: { x: 70, y: 240 }, data: { char: 'b', C: 0, Cnext: null } },
+  { id: '2', type: 'textNode', position: { x: 290, y: 240 }, data: { char: 'a', C: 0, Cnext: null } },
+  { id: '3', type: 'textNode', position: { x: 470, y: 100 }, data: { char: 'b', C: 0, Cnext: null } },
+  { id: '4', type: 'textNode', position: { x: 260, y: 100 }, data: { char: 'b', C: 0, Cnext: null } },
+  { id: '5', type: 'textNode', position: { x: 500, y: 320 }, data: { char: 'b', C: 0, Cnext: null } },
 ];
 
 const initialEdges = [
@@ -68,7 +43,7 @@ function cloneMap(map) {
 function copyPath(path) {
   return {
     nodes: [...(path?.nodes || [])],
-    edges: (path?.edges || []).map((edge) => ({ ...edge })),
+    edgeIds: [...(path?.edgeIds || [])],
     end: path?.end ?? null,
     distance: path?.distance ?? INF,
   };
@@ -82,9 +57,9 @@ function makeSnapshot({
   patternChar,
   C,
   Cnext,
-  bestPath = { nodes: [], edges: [], end: null, distance: INF },
+  bestPath = { nodes: [], edgeIds: [], end: null, distance: INF },
   activeNode = null,
-  activeEdge = null,
+  activeEdgeId = null,
   changedNodes = [],
   queue = [],
 }) {
@@ -98,14 +73,14 @@ function makeSnapshot({
     Cnext: cloneMap(Cnext),
     bestPath: copyPath(bestPath),
     activeNode,
-    activeEdge: activeEdge ? { ...activeEdge } : null,
+    activeEdgeId,
     changedNodes: [...changedNodes],
     queue: queue.map((edge) => ({ ...edge })),
   };
 }
 
-function predecessorIds(nodeId, edges) {
-  return edges.filter((edge) => edge.target === nodeId).map((edge) => edge.source);
+function predecessorEdges(nodeId, edges) {
+  return edges.filter((edge) => edge.target === nodeId);
 }
 
 function outgoingEdges(nodeId, edges) {
@@ -119,15 +94,17 @@ function stateKey(patternIndex, nodeId) {
 function reconstructBestPath(C, finalIndex, back) {
   const candidates = Object.entries(C)
     .filter(([, value]) => value < INF)
-    .sort(([idA, costA], [idB, costB]) => costA - costB || String(idA).localeCompare(String(idB)));
+    .sort(([idA, costA], [idB, costB]) => (
+      costA - costB || String(idA).localeCompare(String(idB))
+    ));
 
   if (!candidates.length) {
-    return { nodes: [], edges: [], end: null, distance: INF };
+    return { nodes: [], edgeIds: [], end: null, distance: INF };
   }
 
   const [end, distance] = candidates[0];
   const reversedNodes = [];
-  const reversedEdges = [];
+  const reversedEdgeIds = [];
   const visitedStates = new Set();
   let currentIndex = finalIndex;
   let currentNode = end;
@@ -135,15 +112,15 @@ function reconstructBestPath(C, finalIndex, back) {
   while (currentIndex >= 0 && currentNode !== null && currentNode !== undefined) {
     const key = stateKey(currentIndex, currentNode);
     if (visitedStates.has(key)) break;
-    visitedStates.add(key);
 
-    const pointer = back.get(key);
+    visitedStates.add(key);
     reversedNodes.push(currentNode);
 
+    const pointer = back.get(key);
     if (!pointer || pointer.kind === 'start') break;
 
-    if (pointer.edge) {
-      reversedEdges.push({ ...pointer.edge });
+    if (pointer.edgeId) {
+      reversedEdgeIds.push(pointer.edgeId);
     }
 
     currentIndex = pointer.prevIndex;
@@ -152,7 +129,7 @@ function reconstructBestPath(C, finalIndex, back) {
 
   return {
     nodes: reversedNodes.reverse(),
-    edges: reversedEdges.reverse(),
+    edgeIds: reversedEdgeIds.reverse(),
     end,
     distance,
   };
@@ -182,7 +159,7 @@ function createRun(nodes, edges, pattern) {
       kind: 'start',
       prevIndex: null,
       prevNode: null,
-      edge: null,
+      edgeId: null,
       operation: 'inicialização',
     });
   }
@@ -213,22 +190,22 @@ function createRun(nodes, edges, pattern) {
     }));
 
     for (const id of ids) {
-      const preds = predecessorIds(id, edges);
-      const bestPred = preds.reduce(
-        (best, pred) => (C[pred] < best.cost ? { id: pred, cost: C[pred] } : best),
-        { id: null, cost: INF },
+      const incoming = predecessorEdges(id, edges);
+      const bestIncoming = incoming.reduce(
+        (best, edge) => (C[edge.source] < best.cost ? { edge, cost: C[edge.source] } : best),
+        { edge: null, cost: INF },
       );
 
       if (chars[id] === p) {
         const startCost = i;
 
-        if (bestPred.cost <= startCost) {
-          Cnext[id] = bestPred.cost;
+        if (bestIncoming.cost <= startCost) {
+          Cnext[id] = bestIncoming.cost;
           choices[id] = {
             kind: 'match',
             prevIndex: i - 1,
-            prevNode: bestPred.id,
-            edge: { source: bestPred.id, target: id },
+            prevNode: bestIncoming.edge.source,
+            edgeId: bestIncoming.edge.id,
             operation: 'casamento',
           };
         } else {
@@ -237,7 +214,7 @@ function createRun(nodes, edges, pattern) {
             kind: 'start',
             prevIndex: null,
             prevNode: null,
-            edge: null,
+            edgeId: null,
             operation: 'início de sufixo',
           };
         }
@@ -248,27 +225,29 @@ function createRun(nodes, edges, pattern) {
             kind: 'delete-pattern-char',
             prevIndex: i - 1,
             prevNode: id,
-            edge: null,
+            edgeId: null,
             operation: 'deleção no padrão',
           },
-          ...preds.map((pred) => ({
-            cost: C[pred],
+          ...incoming.map((edge) => ({
+            cost: C[edge.source],
             kind: 'substitute',
             prevIndex: i - 1,
-            prevNode: pred,
-            edge: { source: pred, target: id },
+            prevNode: edge.source,
+            edgeId: edge.id,
             operation: 'substituição',
           })),
         ];
 
         const best = alternatives.reduce(
-          (currentBest, candidate) => (candidate.cost < currentBest.cost ? candidate : currentBest),
+          (currentBest, candidate) => (
+            candidate.cost < currentBest.cost ? candidate : currentBest
+          ),
           {
             cost: INF,
             kind: 'none',
             prevIndex: null,
             prevNode: null,
-            edge: null,
+            edgeId: null,
             operation: 'nenhuma',
           },
         );
@@ -303,7 +282,7 @@ function createRun(nodes, edges, pattern) {
         kind: choice.kind,
         prevIndex: choice.prevIndex,
         prevNode: choice.prevNode,
-        edge: choice.edge ? { ...choice.edge } : null,
+        edgeId: choice.edgeId,
         operation: choice.operation,
       });
     }
@@ -318,11 +297,7 @@ function createRun(nodes, edges, pattern) {
       Cnext,
     }));
 
-    const queue = edges.map((edge) => ({
-      source: edge.source,
-      target: edge.target,
-      reason: 'varredura inicial',
-    }));
+    const queue = edges.map((edge) => ({ edgeId: edge.id, source: edge.source, target: edge.target }));
     let cursor = 0;
 
     snapshots.push(makeSnapshot({
@@ -340,7 +315,7 @@ function createRun(nodes, edges, pattern) {
       const currentEdge = queue[cursor];
       cursor += 1;
 
-      const { source, target } = currentEdge;
+      const { edgeId, source, target } = currentEdge;
       const oldValue = C[target];
       const candidate = C[source] >= INF ? INF : C[source] + 1;
       const remaining = queue.slice(cursor);
@@ -353,7 +328,7 @@ function createRun(nodes, edges, pattern) {
         patternChar: p,
         C,
         Cnext,
-        activeEdge: { source, target },
+        activeEdgeId: edgeId,
         queue: remaining,
       }));
 
@@ -364,14 +339,14 @@ function createRun(nodes, edges, pattern) {
           kind: 'insert-text-char',
           prevIndex: i,
           prevNode: source,
-          edge: { source, target },
+          edgeId,
           operation: 'inserção no texto',
         });
 
         const outgoing = outgoingEdges(target, edges).map((edge) => ({
+          edgeId: edge.id,
           source: edge.source,
           target: edge.target,
-          reason: `C[${target}] diminuiu`,
         }));
         queue.push(...outgoing);
 
@@ -384,7 +359,7 @@ function createRun(nodes, edges, pattern) {
           C,
           Cnext,
           activeNode: target,
-          activeEdge: { source, target },
+          activeEdgeId: edgeId,
           changedNodes: [target],
           queue: queue.slice(cursor),
         }));
@@ -397,7 +372,7 @@ function createRun(nodes, edges, pattern) {
           patternChar: p,
           C,
           Cnext,
-          activeEdge: { source, target },
+          activeEdgeId: edgeId,
           queue: remaining,
         }));
       }
@@ -506,23 +481,11 @@ function Visualizer() {
   }, [nodes, current]);
 
   const decoratedEdges = useMemo(() => {
-    const bestPathEdgeIds = new Set();
-
-    for (const pathEdge of current?.bestPath?.edges || []) {
-      const matchingEdge = edges.find(
-        (edge) => edge.source === pathEdge.source && edge.target === pathEdge.target,
-      );
-      if (matchingEdge) bestPathEdgeIds.add(matchingEdge.id);
-    }
-
-    const activeEdgeId = current?.activeEdge
-      ? edges.find(
-        (edge) => edge.source === current.activeEdge.source && edge.target === current.activeEdge.target,
-      )?.id
-      : null;
+    const pathEdgeIds = new Set(current?.bestPath?.edgeIds || []);
+    const activeEdgeId = current?.activeEdgeId || null;
 
     return edges.map((edge) => {
-      const isPathEdge = bestPathEdgeIds.has(edge.id);
+      const isPathEdge = pathEdgeIds.has(edge.id);
       const isActiveEdge = edge.id === activeEdgeId;
 
       let color = '#526275';
@@ -541,6 +504,7 @@ function Visualizer() {
       return {
         ...edge,
         className: '',
+        selected: false,
         animated: false,
         markerEnd: { type: MarkerType.ArrowClosed, color },
         style: {
@@ -875,7 +839,7 @@ function Visualizer() {
           <div className="queue-box">
             {current?.queue?.length ? (
               current.queue.slice(0, 12).map((edge, index) => (
-                <span className="queue-item" key={`${edge.source}-${edge.target}-${index}`}>
+                <span className="queue-item" key={`${edge.edgeId}-${index}`}>
                   {edge.source}→{edge.target}
                 </span>
               ))

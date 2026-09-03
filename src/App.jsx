@@ -1143,7 +1143,7 @@ function App() {
             <div className="best-path-box">
               <strong>Caminhos de menor distância</strong>
               <div className="best-path-select">
-                abel htmlFor="pathSelect">Escolha o caminho:</label>
+                <label htmlFor="pathSelect">Escolha o caminho:</label>
                 <select
                   id="pathSelect"
                   value={selectedPathIndex}

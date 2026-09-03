@@ -1137,43 +1137,7 @@ function App() {
             </div>
           </div>
 
-          <h3>Valores atuais</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>v</th>
-                <th>t[v]</th>
-                <th>C[v]</th>
-                <th>C′[v]</th>
-              </tr>
-            </thead>
-            <tbody>
-              {nodes.map((node) => {
-                const id = node.id;
-                const char = node.data.char || '?';
-                const Cv = current
-                  ? current.C[id] ?? node.data.C
-                  : node.data.C;
-                const Cnextv = current
-                  ? current.Cnext[id] ?? node.data.Cnext
-                  : node.data.Cnext;
-                const changedRow =
-                  current?.changedNodes?.includes(id) ?? false;
-
-                return (
-                  <tr
-                    key={id}
-                    className={changedRow ? 'changed-row' : ''}
-                  >
-                    <td>{id}</td>
-                    <td>{char}</td>
-                    <td>{displayValue(Cv)}</td>
-                    <td>{displayValue(Cnextv)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          
 
           {selectedPath && (
             <div className="best-path-box">
@@ -1293,6 +1257,44 @@ function App() {
               <span className="muted">Fila vazia.</span>
             )}
           </div>
+
+          <h3>Valores atuais</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>v</th>
+                <th>t[v]</th>
+                <th>C[v]</th>
+                <th>C′[v]</th>
+              </tr>
+            </thead>
+            <tbody>
+              {nodes.map((node) => {
+                const id = node.id;
+                const char = node.data.char || '?';
+                const Cv = current
+                  ? current.C[id] ?? node.data.C
+                  : node.data.C;
+                const Cnextv = current
+                  ? current.Cnext[id] ?? node.data.Cnext
+                  : node.data.Cnext;
+                const changedRow =
+                  current?.changedNodes?.includes(id) ?? false;
+
+                return (
+                  <tr
+                    key={id}
+                    className={changedRow ? 'changed-row' : ''}
+                  >
+                    <td>{id}</td>
+                    <td>{char}</td>
+                    <td>{displayValue(Cv)}</td>
+                    <td>{displayValue(Cnextv)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </aside>
       </div>
     </div>

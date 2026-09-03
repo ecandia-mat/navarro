@@ -825,7 +825,7 @@ function App() {
     setEdges(initialEdges);
     setSnapshots([]);
     setPaths([]);
-    setSelectedPathIndex(0);
+    setSelectedPathIndex(-1);
     setCurrentIndex(0);
     setError(null);
     setIsPlaying(false);
@@ -848,7 +848,7 @@ function App() {
     setError(null);
     setSnapshots(runSnapshots);
     setPaths(runPaths);
-    setSelectedPathIndex(0);
+    setSelectedPathIndex(-1);
     setCurrentIndex(0);
   }, [nodes, edges, pattern]);
 
